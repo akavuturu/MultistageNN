@@ -23,12 +23,12 @@ layers2 = [1, 30, 30, 30, 1]
 kappa = 1
 
 
-def fun_test(t):
-    x = t ** 2 + 2 * t + 1
-    return x
+def fun_test(x):
+    y = (1 - (x ** 2) / 2) * np.cos(30*(x + 0.5*(x ** 3)))
+    return y
 
 
-t = np.linspace(-1.02, 1.02, 1501)[:, None]
+t = np.linspace(-1.02, 1.02, N_eval)[:, None]
 t_train = tf.cast(t, dtype=tf.float64)
 x_train = fun_test(t_train)
 
@@ -45,17 +45,14 @@ First stage of training
 '''
 # acts = 0 indicates selecting tanh as the activation function
 model = PhysicsInformedNN(t_train, x_train, layers, kappa, lt, ut, acts=0)
-print(model.weights)
-print(model.biases)
 # print(type(model.weights))
 # int1, int2 = model.weights.numpy(), model.biases.numpy()
 # torch1, torch2 = torch.from_numpy(int1), torch.from_numpy(int2)
 # torch.save(torch1, 'det_weights.pt')
 # torch.save(torch2, 'det_biases.pt')
 
-import sys; sys.exit(0)
-
 # start the first stage training
+print("Stage 1*********************************************")
 model.train(3000, 1)     # mode 1 use Adam
 # model.train(10000, 2)    # mode 2 use L-bfgs
 x_pred = model.predict(t_eval)
@@ -74,6 +71,8 @@ kappa2 = 3*NumZero
 # (acts = 1 indicates selecting sin as the activation function)
 model2 = PhysicsInformedNN(t_train, x_train2, layers, kappa2, lt, ut, acts=1)
 # start the second stage training
+print("Stage 2*********************************************")
+
 model2.train(5000, 1)    # mode 1 use Adam
 # model2.train(20000, 2)   # mode 2 use L-bfgs
 x_pred2 = model2.predict(t_eval)
@@ -97,12 +96,13 @@ kappa3 = 3*NumZero2
 # (acts = 1 indicates selecting sin as the activation function)
 model3 = PhysicsInformedNN(t_train2, x_train3, layers2, kappa3, lt, ut, acts=1)
 # start the third stage training
+print("Stage 3*********************************************")
+
 model3.train(5000, 1)      # mode 1 use Adam
 # model3.train(30000, 2)     # mode 2 use L-bfgs
 x_pred3 = model3.predict(t_eval)
 # combining the result from first, second and third stages
 x_p2 = x_pred + x_pred2 + x_pred3
-
 
 '''
 Fourth stage of training
@@ -117,6 +117,8 @@ kappa4 = 3*NumZero3
 # (acts = 1 indicates selecting sin as the activation function)
 model4 = PhysicsInformedNN(t_train2, x_train4, layers2, kappa4, lt, ut, acts=1)
 # start the fourth stage training
+print("Stage 4*********************************************")
+
 model4.train(5000, 1)
 # model4.train(40000, 2)
 x_pred4 = model4.predict(t_eval)
@@ -124,30 +126,29 @@ print(x_pred4)
 # combining the result from all stages
 x_p3 = x_pred + x_pred2 + x_pred3 + x_pred4
 
-
 #%%
 # combine the loss of all four stages of training
-loss = np.array(model.loss + model2.loss + model3.loss + model4.loss)
+# loss = np.array(model.loss + model2.loss + model3.loss + model4.loss)
 
-residue = x_train4 - model4.predict(t_train2)
+# residue = x_train4 - model4.predict(t_train2)
 
-error_x = np.linalg.norm(x_eval-x_pred, 2)/np.linalg.norm(x_eval, 2)
-print('Error u: %e' % (error_x))
+# error_x = np.linalg.norm(x_eval-x_pred, 2)/np.linalg.norm(x_eval, 2)
+# print('Error u: %e' % (error_x))
 
-error_x2 = np.linalg.norm(x_eval-x_p, 2)/np.linalg.norm(x_eval, 2)
-print('Error u: %e' % (error_x2))
+# error_x2 = np.linalg.norm(x_eval-x_p, 2)/np.linalg.norm(x_eval, 2)
+# print('Error u: %e' % (error_x2))
 
-error_x3 = np.linalg.norm(x_eval-x_p2, 2)/np.linalg.norm(x_eval, 2)
-print('Error u: %e' % (error_x3))
+# error_x3 = np.linalg.norm(x_eval-x_p2, 2)/np.linalg.norm(x_eval, 2)
+# print('Error u: %e' % (error_x3))
 
-error_x4 = np.linalg.norm(x_eval-x_p3, 2)/np.linalg.norm(x_eval, 2)
-print('Error u: %e' % (error_x4))
+# error_x4 = np.linalg.norm(x_eval-x_p3, 2)/np.linalg.norm(x_eval, 2)
+# print('Error u: %e' % (error_x4))
 
-mdic = {"t": t_eval.numpy(), "x_g": x_eval.numpy(), "x0": x_pred.numpy(),
-        "x1": x_pred2.numpy(), "x2": x_pred3.numpy(), 'x3': x_pred4.numpy(),
-        "err": residue.numpy(), 'loss': loss}
-FileName = 'Reg_mNN_1D_64bit.mat'
-savemat(FileName, mdic)
+# mdic = {"t": t_eval.numpy(), "x_g": x_eval.numpy(), "x0": x_pred.numpy(),
+#         "x1": x_pred2.numpy(), "x2": x_pred3.numpy(), 'x3': x_pred4.numpy(),
+#         "err": residue.numpy(), 'loss': loss}
+# FileName = 'Reg_mNN_1D_64bit.mat'
+# savemat(FileName, mdic)
 
 #%%
 
