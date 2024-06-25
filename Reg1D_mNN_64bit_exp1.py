@@ -45,11 +45,6 @@ First stage of training
 '''
 # acts = 0 indicates selecting tanh as the activation function
 model = PhysicsInformedNN(t_train, x_train, layers, kappa, lt, ut, acts=0)
-# print(type(model.weights))
-# int1, int2 = model.weights.numpy(), model.biases.numpy()
-# torch1, torch2 = torch.from_numpy(int1), torch.from_numpy(int2)
-# torch.save(torch1, 'det_weights.pt')
-# torch.save(torch2, 'det_biases.pt')
 
 # start the first stage training
 print("Stage 1*********************************************")
@@ -122,7 +117,6 @@ print("Stage 4*********************************************")
 model4.train(5000, 1)
 # model4.train(40000, 2)
 x_pred4 = model4.predict(t_eval)
-print(x_pred4)
 # combining the result from all stages
 x_p3 = x_pred + x_pred2 + x_pred3 + x_pred4
 

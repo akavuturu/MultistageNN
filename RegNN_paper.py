@@ -136,7 +136,7 @@ class PhysicsInformedNN:
             str_print = tf.strings.join(["Iter: ", str_iter[0],
                                          ", loss: ", str_loss[0]])
             tf.cond(
-                f.iter % 10 == 0,
+                f.iter % 100 == 0,
                 lambda: tf.print(str_print),
                 lambda: tf.constant(True)  # return arbitrary for non-printing case
             )
