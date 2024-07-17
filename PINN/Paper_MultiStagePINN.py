@@ -61,12 +61,6 @@ def neural_net(params, z, limit, scl, act_s=0):
     var = jnp.dot(H, last[0]) + last[1]
     return var
 
-
-# define sech function
-def sech(z):
-    return 1 / jnp.cosh(z)
-
-
 # generate weights and biases for all variables of CLM problem
 def sol_init_MLP(parent_key, n_hl, n_unit):
     '''
