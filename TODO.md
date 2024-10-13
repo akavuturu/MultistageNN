@@ -2,7 +2,7 @@
 
 ## To Do
 
--   write code based on 3d poission (https://github.com/huangynj/poisson) but generalized for high dim
+-   write code based on poission (https://github.com/zheyuanhu01/SDGD_PINN/tree/main/Section_5.1)
 -   write class that takes training data and does everything from there
 -   Get compute time per dimension, and energy savings?
 -   can we identify correlation between nn architecture and cpu time?
