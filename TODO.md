@@ -11,4 +11,4 @@
 
 ## Questions
 
-- How do I increase later stage training sizes if they're residues?
+- rethink sampling and how this will work for multistage networks
