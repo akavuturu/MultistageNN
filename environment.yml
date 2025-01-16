@@ -1,0 +1,17 @@
+name: msnn-env
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - python=3.9
+  - numpy
+  - matplotlib
+  - scipy
+  - pip
+  - tqdm
+  - ipykernel
+  - pip:
+      - tensorflow>=2.18
+      - tensorflow-probability
+      - tf-keras
+      - argparse
