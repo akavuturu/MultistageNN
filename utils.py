@@ -279,8 +279,10 @@ class NeuralNet:
         x_p = self.neural_net(t) * self.scale
         return x_p
 
-def create_ds(dims, lo, hi, N):
-    dimensions = [np.linspace(lo, hi, N)] * dims
+def create_ds(dim, lo, hi, N, max_data_size):
+    while (N ** dim) > max_data_size:
+        N -= 1
+    dimensions = [np.linspace(lo, hi, N)] * dim
     mesh = np.meshgrid(*dimensions, indexing='xy')
     mesh_points = np.stack([m.flatten() for m in mesh], axis=-1)
     mesh_tf = tf.cast(mesh_points, dtype=tf.float64)
@@ -343,4 +345,4 @@ def calculate_N(f_max, L):
 def normalize(x):
     mean, var = tf.nn.moments(x, axes=0)
     normalized_x = (x - mean) / (tf.sqrt(var))
-    return normalized_x, mean, var
+    return normalized_x

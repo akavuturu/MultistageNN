@@ -18,10 +18,10 @@ import argparse
 parser = argparse.ArgumentParser(description="Initialize and train the network.")
 # Network initialization arguments
 parser.add_argument(
-    "--num_stages", type=int, default=5, help="Upper limit on number of stages in the network."
+    "--num_stages", type=int, default=6, help="Upper limit on number of stages in the network."
 )
 parser.add_argument(
-    "--precision", type=float, default=1e-20, help="Upper limit on required error of final stage."
+    "--precision", type=float, default=1e-16, help="Upper limit on required error of final stage."
 )
 parser.add_argument(
     "--num_hidden_layers", type=int, default=3, help="Number of hidden layers per stage."
@@ -143,7 +143,7 @@ class MultistageNeuralNetwork:
         dominant_freq = max(dominant_freqs)
         print(f"Sample rate = {sample_rate} Hz, Dominant Frequency = {dominant_freq} Hz, Magnitude = {magnitude}")
 
-        kappa_f = 2 * np.pi * dominant_freq if dominant_freq > 0 else 2 * np.pi * 1e-16
+        kappa_f = 2 * np.pi * dominant_freq if dominant_freq > 0 else 2 * np.pi * 0.01
         print(f"New Kappa: {kappa_f}")
         return kappa_f, dominant_freq
 
@@ -154,50 +154,51 @@ if __name__ == "__main__":
     num_hidden_layers = args.num_hidden_layers
     num_hidden_nodes = args.num_hidden_nodes
     precision = args.precision
+    max_data_size = 16384
 
     N_train = int(round(1600 ** (1 / dim)))
     N_eval = int(round(5000 ** (1 / dim)))
-    x_train = create_ds(dim, -L/2, L/2, N_train)
+    x_train = create_ds(dim, -L/2, L/2, N_train, max_data_size)
     y_train = tf.reshape(poisson(x_train), [len(x_train), 1])
-    y_train, _, _ = normalize(y_train)
-
-    x_eval = create_ds(dim, -L/2, L/2, N_eval)
+    y_train_norm = normalize(y_train)
+    x_eval = create_ds(dim, -L/2, L/2, N_eval, max_data_size)
     y_eval = tf.reshape(poisson(x_eval), [len(x_eval), 1])
-    y_eval = normalize(y_eval)
-
-    logging.info(f"Created First Dataset {x_train.shape}")
     training_iters = list([(3000, 6000)] + [(5000, 8000*i) for i in range(2, 15)])[:num_stages]
 
     MSNN = MultistageNeuralNetwork(x_train, args.num_hidden_layers, args.num_hidden_nodes)
     kappa = 1
-    logging.info(f"TRAINING STAGE {1}: Data size: {x_train.shape}, Label size: {y_train.shape}")
-    MSNN.train(x_train, y_train, stage=0, kappa=1, iters=training_iters[0])
-    curr_residue = y_train - tf.add_n([MSNN.stages[j].predict(x_train) for j in range(1)])
-    mean_residue = tf.abs(tf.reduce_mean(curr_residue))
-    # curr_residue, mean, var = normalize(curr_residue)
+    logging.info(f"TRAINING STAGE {1}: Data size: {x_train.shape}")
+    MSNN.train(x_train, y_train_norm, stage=0, kappa=1, iters=training_iters[0])
+    curr_residue = y_train_norm - tf.add_n([MSNN.stages[j].predict(x_train) for j in range(1)])
+    mean_residue = tf.reduce_mean(tf.abs(curr_residue))
     logging.info(f"Completed training stage 1, loss={MSNN.stages[-1].loss[-1]}, residue={mean_residue}")
 
     i = 1
     while mean_residue > precision and i < num_stages:
         kappa, f_d = MultistageNeuralNetwork.fftn_(x_train, curr_residue)
+        if f_d == 0: 
+            logging.info("Oops! Your dominant frequency is 0...")
+            break
         
-        N_train = 2 ** round(np.log2(6*np.pi*f_d))
-        x_train = create_ds(dim, -L/2, L/2, N_train)
+        N_train = int(6 * np.pi * f_d)
+        x_train = create_ds(dim, -L/2, L/2, N_train, max_data_size)
         y_train = tf.reshape(poisson(x_train), [len(x_train), 1])
-        logging.info(f"TRAINING STAGE {i + 1}: Data size: {x_train.shape}, Label size: {y_train.shape}")
+        y_train_norm = normalize(y_train)
+        logging.info(f"TRAINING STAGE {i + 1}: Data size: {x_train.shape}")
 
-        curr_residue = y_train - tf.add_n([MSNN.stages[j].predict(x_train) for j in range(i)])
-        mean_residue = tf.abs(tf.reduce_mean(curr_residue))
-        # curr_residue, mean, var = normalize(curr_residue)
-
+        curr_residue = y_train_norm - tf.add_n([MSNN.stages[j].predict(x_train) for j in range(i)])
         MSNN.train(x_train, curr_residue, stage=i, kappa=kappa, iters=training_iters[i])
+
+        mean_residue = tf.reduce_mean(tf.abs(y_train_norm - tf.add_n([MSNN.stages[j].predict(x_train) for j in range(i)])))
         logging.info(f"Completed training stage {i + 1}, loss={MSNN.stages[i].loss[-1]}, residue={mean_residue}")
         i += 1
 
     if i >= num_stages:
         logging.info(f"Reached maximum stages, loss={MSNN.stages[-1].loss[-1]}, residue={mean_residue}")
-    else:
+    elif mean_residue <= precision:
         logging.info(f"Reached threshold precision, loss={MSNN.stages[-1].loss[-1]}, residue={mean_residue}")
+    else:
+        logging.info(f"Exited training unexpectedly, previous loss={MSNN.stages[-2].loss[-1]}, previous residue={mean_residue}")
 
     if args.plot:
         loss = np.concatenate([stage.loss for stage in MSNN.stages])
