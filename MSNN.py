@@ -18,7 +18,7 @@ import argparse
 parser = argparse.ArgumentParser(description="Initialize and train the network.")
 # Network initialization arguments
 parser.add_argument(
-    "--num_stages", type=int, default=6, help="Upper limit on number of stages in the network."
+    "--num_stages", type=int, default=4, help="Upper limit on number of stages in the network."
 )
 parser.add_argument(
     "--precision", type=float, default=1e-16, help="Upper limit on required error of final stage."
@@ -160,7 +160,7 @@ if __name__ == "__main__":
     N_eval = int(round(5000 ** (1 / dim)))
     x_train = create_ds(dim, -L/2, L/2, N_train, max_data_size)
     y_train = tf.reshape(poisson(x_train), [len(x_train), 1])
-    y_train_norm = normalize(y_train)
+    # y_train = normalize(y_train)
     x_eval = create_ds(dim, -L/2, L/2, N_eval, max_data_size)
     y_eval = tf.reshape(poisson(x_eval), [len(x_eval), 1])
     training_iters = list([(3000, 6000)] + [(5000, 8000*i) for i in range(2, 15)])[:num_stages]
@@ -168,8 +168,8 @@ if __name__ == "__main__":
     MSNN = MultistageNeuralNetwork(x_train, args.num_hidden_layers, args.num_hidden_nodes)
     kappa = 1
     logging.info(f"TRAINING STAGE {1}: Data size: {x_train.shape}")
-    MSNN.train(x_train, y_train_norm, stage=0, kappa=1, iters=training_iters[0])
-    curr_residue = y_train_norm - tf.add_n([MSNN.stages[j].predict(x_train) for j in range(1)])
+    MSNN.train(x_train, y_train, stage=0, kappa=1, iters=training_iters[0])
+    curr_residue = y_train - tf.add_n([MSNN.stages[j].predict(x_train) for j in range(1)])
     mean_residue = tf.reduce_mean(tf.abs(curr_residue))
     logging.info(f"Completed training stage 1, loss={MSNN.stages[-1].loss[-1]}, residue={mean_residue}")
 
@@ -183,13 +183,13 @@ if __name__ == "__main__":
         N_train = int(6 * np.pi * f_d)
         x_train = create_ds(dim, -L/2, L/2, N_train, max_data_size)
         y_train = tf.reshape(poisson(x_train), [len(x_train), 1])
-        y_train_norm = normalize(y_train)
+        # y_train = normalize(y_train)
         logging.info(f"TRAINING STAGE {i + 1}: Data size: {x_train.shape}")
 
-        curr_residue = y_train_norm - tf.add_n([MSNN.stages[j].predict(x_train) for j in range(i)])
+        curr_residue = y_train - tf.add_n([MSNN.stages[j].predict(x_train) for j in range(i)])
         MSNN.train(x_train, curr_residue, stage=i, kappa=kappa, iters=training_iters[i])
 
-        mean_residue = tf.reduce_mean(tf.abs(y_train_norm - tf.add_n([MSNN.stages[j].predict(x_train) for j in range(i)])))
+        mean_residue = tf.reduce_mean(tf.abs(y_train - tf.add_n([MSNN.stages[j].predict(x_train) for j in range(i)])))
         logging.info(f"Completed training stage {i + 1}, loss={MSNN.stages[i].loss[-1]}, residue={mean_residue}")
         i += 1
 
