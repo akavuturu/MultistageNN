@@ -2,6 +2,7 @@ import numpy as np
 import tensorflow as tf
 import tensorflow_probability as tfp
 from tqdm import tqdm
+from itertools import product
 
 class NeuralNet:
     # Initialize the class
@@ -280,11 +281,11 @@ class NeuralNet:
         return x_p
 
 def create_ds(dim, lo, hi, N, max_data_size):
-    while (N ** dim) > max_data_size:
-        N -= 1
-    dimensions = [np.linspace(lo, hi, N)] * dim
-    mesh = np.meshgrid(*dimensions, indexing='xy')
-    mesh_points = np.stack([m.flatten() for m in mesh], axis=-1)
+    # while (N ** dim) > max_data_size:
+    #     N -= 1
+    points_per_dim = int(N ** (1/dim))
+    grids = [np.linspace(lo, hi, points_per_dim) for _ in range(dim)]
+    mesh_points = np.array(list(product(*grids)))  # Cartesian product
     mesh_tf = tf.cast(mesh_points, dtype=tf.float64)
     return mesh_tf
 

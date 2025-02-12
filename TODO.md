@@ -2,13 +2,7 @@
 
 ## To Do
 
-- Normalize residue by RMSE
-- write code based on poission (<https://github.com/zheyuanhu01/SDGD_PINN/tree/main/Section_5.1>)
-- Get compute time per dimension, and energy savings?
-- can we identify correlation between nn architecture and cpu time?
-- find nn architecture based on hitting accuracy
-- dont do all runs (1, 2, 3, 50, 100)
-
-## Questions
-
-- rethink sampling and how this will work for multistage networks
+- try 20 ppd for n=5
+- check if zeros method works for high dim
+- work till mid March, work on (real) paper draft (70% by EO April submitted for thesis), finalize draft for paper
+- start working on early portions of theory for paper (abs, theory of MSNN) - meet every 2 weeks

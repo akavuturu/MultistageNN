@@ -155,14 +155,12 @@ if __name__ == "__main__":
     num_hidden_nodes = args.num_hidden_nodes
     precision = args.precision
     max_data_size = 16384
+    points_per_dim = 20
 
-    N_train = int(round(1600 ** (1 / dim)))
-    N_eval = int(round(5000 ** (1 / dim)))
+    # N_train = int(round(1600 ** (1 / dim)))
+    N_train = points_per_dim ** 5
     x_train = create_ds(dim, -L/2, L/2, N_train, max_data_size)
     y_train = tf.reshape(poisson(x_train), [len(x_train), 1])
-    # y_train = normalize(y_train)
-    x_eval = create_ds(dim, -L/2, L/2, N_eval, max_data_size)
-    y_eval = tf.reshape(poisson(x_eval), [len(x_eval), 1])
     training_iters = list([(3000, 6000)] + [(5000, 8000*i) for i in range(2, 15)])[:num_stages]
 
     MSNN = MultistageNeuralNetwork(x_train, args.num_hidden_layers, args.num_hidden_nodes)
@@ -180,10 +178,10 @@ if __name__ == "__main__":
             logging.info("Oops! Your dominant frequency is 0...")
             break
         
-        N_train = int(6 * np.pi * f_d)
-        x_train = create_ds(dim, -L/2, L/2, N_train, max_data_size)
-        y_train = tf.reshape(poisson(x_train), [len(x_train), 1])
-        # y_train = normalize(y_train)
+        # N_train = int(6 * np.pi * f_d)
+        # x_train = create_ds(dim, -L/2, L/2, N_train, max_data_size)
+        # y_train = tf.reshape(poisson(x_train), [len(x_train), 1])
+
         logging.info(f"TRAINING STAGE {i + 1}: Data size: {x_train.shape}")
 
         curr_residue = y_train - tf.add_n([MSNN.stages[j].predict(x_train) for j in range(i)])

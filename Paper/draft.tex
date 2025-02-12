@@ -1,0 +1,89 @@
+\documentclass[a4paper,12pt]{article}
+
+% Packages
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{geometry}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage{setspace}
+\usepackage{enumitem}
+\usepackage{caption}
+
+% Page Layout
+\geometry{left=1in, right=1in, top=1in, bottom=1in}
+\setstretch{1.5}
+
+% Section Formatting
+\titleformat{\section}{\large\bfseries}{\thesection.}{0.5em}{}
+\titleformat{\subsection}{\normalsize\bfseries}{\thesubsection.}{0.5em}{}
+\titleformat{\subsubsection}{\normalsize\itshape}{\thesubsubsection.}{0.5em}{}
+
+% Header & Footer
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textit{Research Paper Title}}
+\fancyhead[R]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% Title
+\title{\LARGE \textbf{Title of the Research Paper} \\[1ex] \large Subtitle if Needed}
+\author{
+    First Author$^{1}$ \quad Second Author$^{2}$ \quad Third Author$^{3}$ \\[1ex]
+    \small $^{1}$Department, Institution, Email \\
+    \small $^{2}$Department, Institution, Email \\
+    \small $^{3}$Department, Institution, Email
+}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+    \noindent This paper presents a study on \textit{(topic of research)}. We explore \textit{(main focus)} and provide insights into \textit{(key contributions)}. Our approach involves \textit{(methods used)}, and we evaluate its performance using \textit{(datasets, experiments, etc.)}. The results indicate \textit{(main findings)}.
+\end{abstract}
+
+\section{Introduction}
+\noindent The introduction provides an overview of the problem, research motivation, and objectives. It typically includes:
+
+\begin{itemize}
+    \item \textbf{Background:} Brief discussion on the topic.
+    \item \textbf{Research Problem:} The gap in existing research.
+    \item \textbf{Contributions:} What this paper offers.
+    \item \textbf{Structure:} Outline of the paper sections.
+\end{itemize}
+
+\section{Related Work}
+\noindent A review of prior research relevant to this study. This section compares existing methodologies and highlights the need for the proposed approach.
+
+\section{Methodology}
+\noindent This section describes the proposed method in detail. It includes:
+
+\subsection{Mathematical Formulation}
+Key equations, models, or theoretical background.
+
+\subsection{Proposed Approach}
+A detailed description of the method, including algorithms, architecture, or framework.
+
+\section{Experiments and Results}
+\noindent This section presents the experimental setup, datasets, performance metrics, and results.
+
+\subsection{Experimental Setup}
+Hardware/software specifications, dataset details, and experiment design.
+
+\subsection{Results and Analysis}
+Tables, figures, and discussion of findings.
+
+\section{Conclusion and Future Work}
+\noindent A summary of key insights and potential future extensions of the work.
+
+\section*{Acknowledgments}
+\noindent This section includes funding sources or credits for contributions.
+
+\bibliographystyle{plain}
+\bibliography{references}
+
+\end{document}
