@@ -146,6 +146,15 @@ class MultistageNeuralNetwork:
         kappa_f = 2 * np.pi * dominant_freq if dominant_freq > 0 else 2 * np.pi * 0.01
         print(f"New Kappa: {kappa_f}")
         return kappa_f, dominant_freq
+    def find_zeros(residue):
+        sign_residue = np.sign(residue)
+        num_zeros = 0
+        for axis in range(residue.ndim):
+            shifted_signs = np.roll(sign_residue, shift=-1, axis=axis)
+            mask = (sign_residue[:-1] * shifted_signs[:-1]) < 0
+            num_zeros += np.count_nonzero(mask)
+        kappa = 3 * num_zeros
+        return kappa
 
 if __name__ == "__main__":
     dim = args.dim
@@ -158,7 +167,7 @@ if __name__ == "__main__":
     points_per_dim = 20
 
     # N_train = int(round(1600 ** (1 / dim)))
-    N_train = points_per_dim ** 5
+    N_train = points_per_dim ** dim
     x_train = create_ds(dim, -L/2, L/2, N_train, max_data_size)
     y_train = tf.reshape(poisson(x_train), [len(x_train), 1])
     training_iters = list([(3000, 6000)] + [(5000, 8000*i) for i in range(2, 15)])[:num_stages]
@@ -173,10 +182,11 @@ if __name__ == "__main__":
 
     i = 1
     while mean_residue > precision and i < num_stages:
-        kappa, f_d = MultistageNeuralNetwork.fftn_(x_train, curr_residue)
-        if f_d == 0: 
-            logging.info("Oops! Your dominant frequency is 0...")
-            break
+        # kappa, f_d = MultistageNeuralNetwork.fftn_(x_train, curr_residue)
+        # if f_d == 0: 
+        #     logging.info("Oops! Your dominant frequency is 0...")
+        #     break
+        kappa = MultistageNeuralNetwork.find_zeros(curr_residue)
         
         # N_train = int(6 * np.pi * f_d)
         # x_train = create_ds(dim, -L/2, L/2, N_train, max_data_size)
