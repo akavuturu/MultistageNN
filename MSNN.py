@@ -146,6 +146,7 @@ class MultistageNeuralNetwork:
         kappa_f = 2 * np.pi * dominant_freq if dominant_freq > 0 else 2 * np.pi * 0.01
         print(f"New Kappa: {kappa_f}")
         return kappa_f, dominant_freq
+        
     def find_zeros(residue):
         sign_residue = np.sign(residue)
         num_zeros = 0
