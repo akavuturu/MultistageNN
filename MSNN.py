@@ -4,6 +4,7 @@ import os
 import sys
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 import tensorflow as tf
+import time
 import logging
 tf.get_logger().setLevel(logging.ERROR)
 
@@ -148,39 +149,99 @@ class MultistageNeuralNetwork:
         # print(f"New Kappa: {kappa_f}")
         return kappa_f, dominant_freq
     
-    @staticmethod
-    def sfftn(x_train, residue, k=10, sample_factor=2):
+    def sfftn(x_train, residue, sparsity_threshold=0.01, k=None):
+        """
+        Perform a Sparse Fast Fourier Transform (SFFT) to analyze the frequency domain of the residue,
+        optimized for high-dimensional data. Assumes data is already on a complete grid.
+
+        Args:
+            x_train (tf.Tensor): Input training data with coordinates.
+            residue (tf.Tensor): Residual errors between predictions and true values.
+            sparsity_threshold (float): Threshold below which frequency components are set to zero (relative to max).
+            max_frequencies (int, optional): Maximum number of frequency components to keep. If None, use threshold only.
+
+        Returns:
+            tuple: (kappa_f, dominant_freq, sparse_spectrum)
+                - kappa_f: Adjusted scaling factor based on the dominant frequency
+                - dominant_freq: The dominant frequency identified
+                - sparse_spectrum: Sparse representation of the frequency spectrum
+        """
+        # Extract dimensionality info
         dim = x_train.shape[-1]
         N_train = int(round(x_train.shape[0] ** (1 / dim)))
-        g = residue.numpy()
+        g = residue.numpy().flatten()
         
-        # Subsample grid to reduce FFT cost
-        subsample_slices = tuple(slice(None, None, sample_factor) for _ in range(dim))
-        GG = g.reshape([N_train] * dim)[subsample_slices]  # Apply subsampling
-        G = fftn(GG)  # Perform FFT
+        # For very high dimensions, we may need to use a smaller grid
+        if dim > 4:
+            # Determine appropriate grid size based on available memory
+            # For very high dimensions, use smaller N_per_dim
+            N_per_dim = min(N_train, max(8, int(32 / np.sqrt(dim))))
+        else:
+            N_per_dim = N_train
+        
+        # Reshape to grid - since we assume data is on complete grid, this should work
+        GG = g.reshape([N_per_dim] * dim)
+        
+        # Perform FFT on the grid
+        G = fftn(GG)
         G_shifted = fftshift(G)
-
-        N = G.shape[0]
-        total_time_range = 2  # Time range from -1 to 1.
-        sample_rate = N / total_time_range  # Sampling rate
-
+        
+        # Setup frequency domain parameters
+        N = N_per_dim
+        total_time_range = 2  # Time range from -1 to 1
+        sample_rate = N / total_time_range
         half_N = N // 2
         T = 1.0 / sample_rate
+        
+        # Extract positive frequencies
         idxs = tuple(slice(half_N, N, 1) for _ in range(dim))
-        G_pos = G_shifted[idxs]  # Extract positive frequencies
-
-        freqs = [fftshift(fftfreq(GG.shape[i], d=T)) for i in range(len(GG.shape))]
-        freq_pos = [freqs[i][half_N:] for i in range(len(freqs))]
-
+        G_pos = G_shifted[idxs]
+        
+        # Calculate frequency axes
+        freqs = [fftshift(fftfreq(N, d=T)) for _ in range(dim)]
+        freq_pos = [freqs[i][half_N:] for i in range(dim)]
+        
+        # Compute magnitude spectrum
         magnitude_spectrum = np.abs(G_pos)
-        top_k_indices = np.unravel_index(np.argsort(magnitude_spectrum, axis=None)[-k:], magnitude_spectrum.shape)
-        dominant_freqs = [max(freq_pos[i][top_k_indices[i]]) for i in range(len(freq_pos))]
+        max_magnitude = np.max(magnitude_spectrum)
         
-        magnitude = np.max(magnitude_spectrum[top_k_indices]) / (N ** dim)  # Normalize magnitude
+        # Apply sparsity threshold - keep only components above threshold
+        if sparsity_threshold > 0:
+            mask = magnitude_spectrum > (sparsity_threshold * max_magnitude)
+            
+            # Further limit number of frequencies if specified
+            if k is not None and np.sum(mask) > k:
+                # Sort indices by magnitude and keep only top k
+                flat_idx = np.argsort(magnitude_spectrum.flatten())[::-1][:k]
+                new_mask = np.zeros_like(magnitude_spectrum, dtype=bool).flatten()
+                new_mask[flat_idx] = True
+                mask = new_mask.reshape(magnitude_spectrum.shape)
+        else:
+            mask = np.ones_like(magnitude_spectrum, dtype=bool)
+        
+        # Create sparse representation
+        sparse_magnitude = np.zeros_like(magnitude_spectrum)
+        sparse_magnitude[mask] = magnitude_spectrum[mask]
+        
+        # Find dominant frequency
+        max_idx = np.unravel_index(np.argmax(magnitude_spectrum), magnitude_spectrum.shape)
+        dominant_freqs = [freq_pos[i][max_idx[i]] for i in range(dim)]
+        magnitude = magnitude_spectrum[max_idx] / (N ** dim)  # Normalize magnitude
+        
         dominant_freq = max(dominant_freqs)
-        
         kappa_f = 2 * np.pi * dominant_freq if dominant_freq > 0 else 2 * np.pi * 0.01
-        return kappa_f, dominant_freq
+        
+        # Convert to sparse matrix representation for high dimensions
+        if dim <= 2:
+            # For 1D or 2D, just return the pruned array
+            sparse_spectrum = sparse_magnitude
+        else:
+            # For higher dimensions, use COO sparse format
+            sparse_idx = np.where(mask)
+            values = magnitude_spectrum[sparse_idx]
+            sparse_spectrum = (sparse_idx, values, magnitude_spectrum.shape)
+        
+        return kappa_f, dominant_freq, sparse_spectrum
 
 
     def find_zeros(residue):
@@ -195,20 +256,30 @@ class MultistageNeuralNetwork:
 
 if __name__ == "__main__":
 
-    dim = 2
+    dim = 30
     lo, hi = -1, 1
-    N = 200
+    N = 3200000
     x_train = create_ds(dim, lo, hi, N)
     y_train = tf.reshape(poisson(x_train), [len(x_train), 1])
     print(x_train.shape, y_train.shape)
     
     # Compute FFT-based dominant frequency
+    start_time = time.time()
     kappa_f1, dominant_freq1 = MultistageNeuralNetwork.fftn_(x_train, y_train)
-    kappa_f2, dominant_freq2 = MultistageNeuralNetwork.sfftn(x_train, y_train, k=10, sample_factor=1)
+    fft_time = time.time() - start_time
+
+    start_time = time.time()
+    kappa_f2, dominant_freq2, spectrum = MultistageNeuralNetwork.sfftn(x_train, y_train)
+    sfft_time = time.time() - start_time
+
+    start_time = time.time()
+    kappa_f3 = MultistageNeuralNetwork.find_zeros(y_train)
+    zeros_time = time.time() - start_time
 
     # Print results
-    print(f"Full FFT: Dominant Frequency = {dominant_freq1}, Kappa = {kappa_f1}")
-    print(f"Sparse FFT: Dominant Frequency = {dominant_freq2}, Kappa = {kappa_f2}")
+    print(f"Full FFT:   Dominant Frequency = {dominant_freq1}, Kappa = {kappa_f1}, Time={fft_time}")
+    print(f"Sparse FFT: Dominant Frequency = {dominant_freq2}, Kappa = {kappa_f2}, Time={sfft_time}")
+    print(f"Zero Crossing: Kappa = {kappa_f3}, Time={zeros_time}")
 
     # Validate results
     assert np.isclose(dominant_freq1, dominant_freq2, atol=1e-3), "Dominant frequencies do not match closely!"

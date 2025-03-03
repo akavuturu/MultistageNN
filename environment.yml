@@ -11,8 +11,8 @@ dependencies:
     - pip
     - tqdm
     - ipykernel
-    - tensorflow>=2.18
     - pip:
-          - tensorflow-probability
+          - tensorflow==2.16.1
+          - tensorflow-probability==0.24.0
           - tf-keras
           - argparse
