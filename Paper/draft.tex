@@ -24,17 +24,17 @@
 % Header & Footer
 \pagestyle{fancy}
 \fancyhf{}
-\fancyhead[L]{\textit{Research Paper Title}}
+\fancyhead[L]{\textit{MSNNs for High-Dimensional Function Approximation}}
 \fancyhead[R]{\thepage}
 \renewcommand{\headrulewidth}{0.4pt}
 
 % Title
-\title{\LARGE \textbf{Title of the Research Paper} \\[1ex] \large Subtitle if Needed}
+\title{\LARGE \textbf{Multistage Neural Networks for High-Dimensional Function Approximation} \\[1ex]}
 \author{
-    First Author$^{1}$ \quad Second Author$^{2}$ \quad Third Author$^{3}$ \\[1ex]
-    \small $^{1}$Department, Institution, Email \\
-    \small $^{2}$Department, Institution, Email \\
-    \small $^{3}$Department, Institution, Email
+    Aravind Kavuturu$^{1}$ \quad Dimitris Giovanis$^{2}$ \quad Somdatta Goswami$^{3}$ \\[1ex]
+    \small $^{1}$Department of Computer Science, Johns Hopkins Univeristy \\
+    \small $^{2}$Department of Civil and Systems Engineering, Johns Hopkins University \\
+    \small $^{3}$Department of Civil and Systems Engineering, Johns Hopkins University
 }
 \date{}
 
@@ -42,25 +42,35 @@
 
 \maketitle
 
+
 \begin{abstract}
-    \noindent This paper presents a study on \textit{(topic of research)}. We explore \textit{(main focus)} and provide insights into \textit{(key contributions)}. Our approach involves \textit{(methods used)}, and we evaluate its performance using \textit{(datasets, experiments, etc.)}. The results indicate \textit{(main findings)}.
+    This paper extends the methodology of multistage neural networks (MSNNs) introduced by Wang and Lai (2024) to high-dimensional function approximation. We investigate the performance of MSNNs on Poisson's equation across various dimensions (1, 2, 5, 10, 25, 50, 100), analyzing their scalability in terms of computational time, power consumption, and accuracy. Our study builds upon prior work to determine the extent to which MSNNs are
+    viable in high dimensional modeling tasks. The results demonstrate ...
 \end{abstract}
 
 \section{Introduction}
-\noindent The introduction provides an overview of the problem, research motivation, and objectives. It typically includes:
+Deep learning techniques have shown significant promise in solving high-dimensional partial differential equations (PDEs), a critical challenge in engineering fields. Traditional numerical methods, such as finite element and finite difference approaches, suffer from the curse of dimensionality, where computational costs grow exponentially with increasing dimensions. Addressing this issue is crucial for enabling accurate and efficient solutions to complex real-world problems.
 
-\begin{itemize}
-    \item \textbf{Background:} Brief discussion on the topic.
-    \item \textbf{Research Problem:} The gap in existing research.
-    \item \textbf{Contributions:} What this paper offers.
-    \item \textbf{Structure:} Outline of the paper sections.
-\end{itemize}
+Recent advances in neural network-based approaches have provided an alternative avenue for tackling high-dimensional PDEs. The multistage neural network (MSNN) methodology proposed by Wang and Lai (2024), and the independently proposed Multilevel Neural Networks (MLNNs) by Aldirany et. al. (2025), introduce a hierarchical training strategy that refines approximations iteratively, achieving machine-precision accuracy in function approximation. This work builds upon earlier deep learning approaches, such as deep Ritz methods \cite{weinan2018deep} and physics-informed neural networks (PINNs) \cite{raissi2019physics}, which have demonstrated the potential of neural networks in solving PDEs but often struggle with scalability in high dimensions.
 
-\section{Related Work}
-\noindent A review of prior research relevant to this study. This section compares existing methodologies and highlights the need for the proposed approach.
+Another relevant approach is the multilevel neural network (MLNN) framework discussed by Aldirany et al. (2025), which leverages multilevel decomposition techniques to improve the accuracy and efficiency of neural networks in solving boundary value problems. Combining the ideas of MSNNs and MLNNs provides a compelling strategy for overcoming the challenges posed by high-dimensional function approximation.
+
+The motivation behind our study is to first validate the results of previous work by replicating their findings and then extend the application of MSNNs to solving high-dimensional Poisson’s equations. By systematically evaluating performance across different dimensions, we analyze computational time, power consumption, and accuracy, comparing these metrics against benchmark methods. Our goal is to determine how well MSNNs scale and assess their feasibility for high-dimensional PDE solving.
+
+This work extends the methodology of Wang and Lai (2024) by adapting MSNNs for higher-dimensional settings and evaluating their performance at an unprecedented scale. The results of this study will provide guidance for researchers and practitioners seeking to deploy MSNNs for complex function approximation tasks in high-dimensional spaces.
+
+\section{Background and Related Works}
+
 
 \section{Methodology}
-\noindent This section describes the proposed method in detail. It includes:
+We follow the MSNN methodology introduced by Wang and Lai (2024) and adapt it for higher dimensions. The network architecture remains fixed across all tested dimensions, allowing us to isolate the effects of dimensionality on performance. 
+
+Key components of our methodology include:
+- Data generation and preprocessing for Poisson's equation.
+- Training strategies and loss functions.
+- Computational constraints and hardware specifications.
+
+Further details will be provided in this section.
 
 \subsection{Mathematical Formulation}
 Key equations, models, or theoretical background.
@@ -68,16 +78,13 @@ Key equations, models, or theoretical background.
 \subsection{Proposed Approach}
 A detailed description of the method, including algorithms, architecture, or framework.
 
-\section{Experiments and Results}
-\noindent This section presents the experimental setup, datasets, performance metrics, and results.
+\section{Results}
+This section will present numerical results, including:
+- Accuracy comparisons across dimensions.
+- Scaling behavior of computation time and power consumption.
+- Performance benchmarks against baseline methods.
 
-\subsection{Experimental Setup}
-Hardware/software specifications, dataset details, and experiment design.
-
-\subsection{Results and Analysis}
-Tables, figures, and discussion of findings.
-
-\section{Conclusion and Future Work}
+\section{Discussion and Future Work}
 \noindent A summary of key insights and potential future extensions of the work.
 
 \section*{Acknowledgments}
