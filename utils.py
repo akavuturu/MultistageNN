@@ -280,9 +280,7 @@ class NeuralNet:
         x_p = self.neural_net(t) * self.scale
         return x_p
 
-def create_ds(dim, lo, hi, N, max_data_size):
-    # while (N ** dim) > max_data_size:
-    #     N -= 1
+def create_ds(dim, lo, hi, N):
     points_per_dim = int(N ** (1/dim))
     grids = [np.linspace(lo, hi, points_per_dim) for _ in range(dim)]
     mesh_points = np.array(list(product(*grids)))  # Cartesian product

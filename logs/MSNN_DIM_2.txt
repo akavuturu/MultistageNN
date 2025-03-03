@@ -1,10 +1,1 @@
-2025-02-18 10:23:41,653 - INFO - Parsed Arguments: Namespace(num_stages=4, precision=1e-16, num_hidden_layers=3, num_hidden_nodes=20, dim=2, L=2.04, plot=True)
-2025-02-18 10:23:41,668 - INFO - TRAINING STAGE 1: Data size: (400, 2)
-2025-02-18 10:25:00,967 - INFO - Completed training stage 1, loss=7.130616381984798e-05, residue=0.006459363774867988
-2025-02-18 10:25:00,967 - INFO - TRAINING STAGE 2: Data size: (400, 2)
-2025-02-18 10:27:58,713 - INFO - Completed training stage 2, loss=1.4166657662136404e-07, residue=0.006459363774867988
-2025-02-18 10:27:58,713 - INFO - TRAINING STAGE 3: Data size: (400, 2)
-2025-02-18 10:32:22,208 - INFO - Completed training stage 3, loss=7.74918966135894e-16, residue=0.0002817450585715531
-2025-02-18 10:32:22,209 - INFO - TRAINING STAGE 4: Data size: (400, 2)
-2025-02-18 10:38:00,752 - INFO - Completed training stage 4, loss=9.335153920412085e-34, residue=2.0623460877545324e-08
-2025-02-18 10:38:00,752 - INFO - Reached maximum stages, loss=9.335153920412085e-34, residue=2.0623460877545324e-08
+2025-03-01 16:43:53,864 - INFO - Parsed Arguments: Namespace(num_stages=4, precision=1e-16, num_hidden_layers=3, num_hidden_nodes=20, dim=2, L=2.04, plot=True)

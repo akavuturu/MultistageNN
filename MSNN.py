@@ -1,6 +1,7 @@
 import warnings
 warnings.simplefilter("ignore")
 import os
+import sys
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 import tensorflow as tf
 import logging
@@ -141,11 +142,47 @@ class MultistageNeuralNetwork:
         magnitude = magnitude_spectrum[max_idx] / (N ** dim)  # Normalize magnitude.
 
         dominant_freq = max(dominant_freqs)
-        print(f"Sample rate = {sample_rate} Hz, Dominant Frequency = {dominant_freq} Hz, Magnitude = {magnitude}")
+        # print(f"Sample rate = {sample_rate} Hz, Dominant Frequency = {dominant_freq} Hz, Magnitude = {magnitude}")
 
         kappa_f = 2 * np.pi * dominant_freq if dominant_freq > 0 else 2 * np.pi * 0.01
-        print(f"New Kappa: {kappa_f}")
+        # print(f"New Kappa: {kappa_f}")
         return kappa_f, dominant_freq
+    
+    @staticmethod
+    def sfftn(x_train, residue, k=10, sample_factor=2):
+        dim = x_train.shape[-1]
+        N_train = int(round(x_train.shape[0] ** (1 / dim)))
+        g = residue.numpy()
+        
+        # Subsample grid to reduce FFT cost
+        subsample_slices = tuple(slice(None, None, sample_factor) for _ in range(dim))
+        GG = g.reshape([N_train] * dim)[subsample_slices]  # Apply subsampling
+        G = fftn(GG)  # Perform FFT
+        G_shifted = fftshift(G)
+
+        N = G.shape[0]
+        total_time_range = 2  # Time range from -1 to 1.
+        sample_rate = N / total_time_range  # Sampling rate
+
+        half_N = N // 2
+        T = 1.0 / sample_rate
+        idxs = tuple(slice(half_N, N, 1) for _ in range(dim))
+        G_pos = G_shifted[idxs]  # Extract positive frequencies
+
+        freqs = [fftshift(fftfreq(GG.shape[i], d=T)) for i in range(len(GG.shape))]
+        freq_pos = [freqs[i][half_N:] for i in range(len(freqs))]
+
+        magnitude_spectrum = np.abs(G_pos)
+        top_k_indices = np.unravel_index(np.argsort(magnitude_spectrum, axis=None)[-k:], magnitude_spectrum.shape)
+        dominant_freqs = [max(freq_pos[i][top_k_indices[i]]) for i in range(len(freq_pos))]
+        
+        magnitude = np.max(magnitude_spectrum[top_k_indices]) / (N ** dim)  # Normalize magnitude
+        dominant_freq = max(dominant_freqs)
+        
+        kappa_f = 2 * np.pi * dominant_freq if dominant_freq > 0 else 2 * np.pi * 0.01
+        return kappa_f, dominant_freq
+
+
     def find_zeros(residue):
         sign_residue = np.sign(residue)
         num_zeros = 0
@@ -157,20 +194,44 @@ class MultistageNeuralNetwork:
         return kappa
 
 if __name__ == "__main__":
+
+    dim = 2
+    lo, hi = -1, 1
+    N = 200
+    x_train = create_ds(dim, lo, hi, N)
+    y_train = tf.reshape(poisson(x_train), [len(x_train), 1])
+    print(x_train.shape, y_train.shape)
+    
+    # Compute FFT-based dominant frequency
+    kappa_f1, dominant_freq1 = MultistageNeuralNetwork.fftn_(x_train, y_train)
+    kappa_f2, dominant_freq2 = MultistageNeuralNetwork.sfftn(x_train, y_train, k=10, sample_factor=1)
+
+    # Print results
+    print(f"Full FFT: Dominant Frequency = {dominant_freq1}, Kappa = {kappa_f1}")
+    print(f"Sparse FFT: Dominant Frequency = {dominant_freq2}, Kappa = {kappa_f2}")
+
+    # Validate results
+    assert np.isclose(dominant_freq1, dominant_freq2, atol=1e-3), "Dominant frequencies do not match closely!"
+
+    print("✅ Test Passed: Sparse FFT produces similar results to Full FFT.")
+
+    sys.exit(1)
+
     dim = args.dim
     L = args.L
     num_stages = args.num_stages
     num_hidden_layers = args.num_hidden_layers
     num_hidden_nodes = args.num_hidden_nodes
     precision = args.precision
-    max_data_size = 16384
     points_per_dim = 20
+
 
     # N_train = int(round(1600 ** (1 / dim)))
     N_train = points_per_dim ** dim
-    x_train = create_ds(dim, -L/2, L/2, N_train, max_data_size)
+    x_train = create_ds(dim, -L/2, L/2, N_train)
     y_train = tf.reshape(poisson(x_train), [len(x_train), 1])
     training_iters = list([(3000, 6000)] + [(5000, 8000*i) for i in range(2, 15)])[:num_stages]
+
 
     MSNN = MultistageNeuralNetwork(x_train, args.num_hidden_layers, args.num_hidden_nodes)
     kappa = 1
