@@ -304,7 +304,7 @@ if __name__ == "__main__":
     training_iters = list([(3000, 6000)] + [(5000, 8000*i) for i in range(2, 15)])[:num_stages]
 
 
-    MSNN = MultistageNeuralNetwork(x_train, args.num_hidden_layers, args.num_hidden_nodes)
+    MSNN = MultistageNeuralNetwork(x_train, num_hidden_layers, num_hidden_nodes)
     kappa = 1
     logging.info(f"TRAINING STAGE {1}: Data size: {x_train.shape}")
     MSNN.train(x_train, y_train, stage=0, kappa=1, iters=training_iters[0])
