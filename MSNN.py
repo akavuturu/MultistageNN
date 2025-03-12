@@ -166,52 +166,38 @@ class MultistageNeuralNetwork:
                 - dominant_freq: The dominant frequency identified
                 - sparse_spectrum: Sparse representation of the frequency spectrum
         """
-        # Extract dimensionality info
         dim = x_train.shape[-1]
         N_train = int(round(x_train.shape[0] ** (1 / dim)))
         g = residue.numpy().flatten()
         
         # For very high dimensions, we may need to use a smaller grid
         if dim > 4:
-            # Determine appropriate grid size based on available memory
-            # For very high dimensions, use smaller N_per_dim
             N_per_dim = min(N_train, max(8, int(32 / np.sqrt(dim))))
         else:
             N_per_dim = N_train
         
-        # Reshape to grid - since we assume data is on complete grid, this should work
         GG = g.reshape([N_per_dim] * dim)
-        
-        # Perform FFT on the grid
         G = fftn(GG)
         G_shifted = fftshift(G)
         
-        # Setup frequency domain parameters
         N = N_per_dim
         total_time_range = 2  # Time range from -1 to 1
         sample_rate = N / total_time_range
         half_N = N // 2
         T = 1.0 / sample_rate
         
-        # Extract positive frequencies
         idxs = tuple(slice(half_N, N, 1) for _ in range(dim))
         G_pos = G_shifted[idxs]
         
-        # Calculate frequency axes
         freqs = [fftshift(fftfreq(N, d=T)) for _ in range(dim)]
         freq_pos = [freqs[i][half_N:] for i in range(dim)]
-        
-        # Compute magnitude spectrum
+
         magnitude_spectrum = np.abs(G_pos)
         max_magnitude = np.max(magnitude_spectrum)
-        
-        # Apply sparsity threshold - keep only components above threshold
+
         if sparsity_threshold > 0:
             mask = magnitude_spectrum > (sparsity_threshold * max_magnitude)
-            
-            # Further limit number of frequencies if specified
             if k is not None and np.sum(mask) > k:
-                # Sort indices by magnitude and keep only top k
                 flat_idx = np.argsort(magnitude_spectrum.flatten())[::-1][:k]
                 new_mask = np.zeros_like(magnitude_spectrum, dtype=bool).flatten()
                 new_mask[flat_idx] = True
@@ -219,30 +205,24 @@ class MultistageNeuralNetwork:
         else:
             mask = np.ones_like(magnitude_spectrum, dtype=bool)
         
-        # Create sparse representation
         sparse_magnitude = np.zeros_like(magnitude_spectrum)
         sparse_magnitude[mask] = magnitude_spectrum[mask]
         
-        # Find dominant frequency
         max_idx = np.unravel_index(np.argmax(magnitude_spectrum), magnitude_spectrum.shape)
         dominant_freqs = [freq_pos[i][max_idx[i]] for i in range(dim)]
-        magnitude = magnitude_spectrum[max_idx] / (N ** dim)  # Normalize magnitude
+        magnitude = magnitude_spectrum[max_idx] / (N ** dim)
         
         dominant_freq = max(dominant_freqs)
         kappa_f = 2 * np.pi * dominant_freq if dominant_freq > 0 else 2 * np.pi * 0.01
         
-        # Convert to sparse matrix representation for high dimensions
         if dim <= 2:
-            # For 1D or 2D, just return the pruned array
             sparse_spectrum = sparse_magnitude
         else:
-            # For higher dimensions, use COO sparse format
             sparse_idx = np.where(mask)
             values = magnitude_spectrum[sparse_idx]
             sparse_spectrum = (sparse_idx, values, magnitude_spectrum.shape)
         
         return kappa_f, dominant_freq, sparse_spectrum
-
 
     def find_zeros(residue):
         sign_residue = np.sign(residue)
@@ -256,12 +236,13 @@ class MultistageNeuralNetwork:
 
 if __name__ == "__main__":
 
-    dim = 30
+    dim = 10
     lo, hi = -1, 1
-    N = 3200000
+    points_per_dim = 5
+    N = points_per_dim ** dim
     x_train = create_ds(dim, lo, hi, N)
     y_train = tf.reshape(poisson(x_train), [len(x_train), 1])
-    print(x_train.shape, y_train.shape)
+    print(f"Data shapes: {x_train.shape}, {y_train.shape}")
     
     # Compute FFT-based dominant frequency
     start_time = time.time()
@@ -296,13 +277,10 @@ if __name__ == "__main__":
     precision = args.precision
     points_per_dim = 20
 
-
-    # N_train = int(round(1600 ** (1 / dim)))
     N_train = points_per_dim ** dim
     x_train = create_ds(dim, -L/2, L/2, N_train)
     y_train = tf.reshape(poisson(x_train), [len(x_train), 1])
     training_iters = list([(3000, 6000)] + [(5000, 8000*i) for i in range(2, 15)])[:num_stages]
-
 
     MSNN = MultistageNeuralNetwork(x_train, num_hidden_layers, num_hidden_nodes)
     kappa = 1
