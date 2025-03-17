@@ -14,7 +14,7 @@ from scipy.fft import fftfreq, fftshift, fftn
 import matplotlib.pyplot as plt
 from pylab import *
 
-from utils import NeuralNet, create_ds, poisson, calculate_N, normalize
+from utils import NeuralNet, create_ds, poisson
 import argparse
 
 parser = argparse.ArgumentParser(description="Initialize and train the network.")
@@ -236,13 +236,28 @@ class MultistageNeuralNetwork:
 
 if __name__ == "__main__":
 
-    dim = 10
-    lo, hi = -1, 1
-    points_per_dim = 5
+    dim = 1
+    points_per_dim = 20
     N = points_per_dim ** dim
+    lo, hi = -1, 1
+    num_stages = 2
+    num_hidden_layers = 3
+    num_hidden_nodes = 20
+    print("Starting up...")
+
     x_train = create_ds(dim, lo, hi, N)
     y_train = tf.reshape(poisson(x_train), [len(x_train), 1])
-    print(f"Data shapes: {x_train.shape}, {y_train.shape}")
+    training_iters = list([(3000, 6000)] + [(5000, 8000*i) for i in range(2, 15)])[:num_stages]
+    print(x_train.shape, y_train.shape)
+
+
+    MSNN = MultistageNeuralNetwork(x_train, num_hidden_layers, num_hidden_nodes)
+    kappa = 1
+    print(f"TRAINING STAGE {1}: Data size: {x_train.shape}")
+    MSNN.train(x_train, y_train, stage=0, kappa=1, iters=training_iters[0])
+    curr_residue = y_train - tf.add_n([MSNN.stages[j].predict(x_train) for j in range(1)])
+    mean_residue = tf.reduce_mean(tf.abs(curr_residue))
+    print(f"Completed training stage 1, loss={MSNN.stages[-1].loss[-1]}, residue={mean_residue}")
     
     # Compute FFT-based dominant frequency
     start_time = time.time()
@@ -263,9 +278,9 @@ if __name__ == "__main__":
     print(f"Zero Crossing: Kappa = {kappa_f3}, Time={zeros_time}")
 
     # Validate results
-    assert np.isclose(dominant_freq1, dominant_freq2, atol=1e-3), "Dominant frequencies do not match closely!"
+    assert np.isclose(dominant_freq1, dominant_freq2, atol=1e-3), "Dominant frequencies do not match closely"
 
-    print("✅ Test Passed: Sparse FFT produces similar results to Full FFT.")
+    print("Test Passed: Sparse FFT produces similar results to Full FFT.")
 
     sys.exit(1)
 
@@ -327,3 +342,18 @@ if __name__ == "__main__":
         plt.xlabel("Iterations")
         plt.ylabel("Loss")
         plt.savefig(f"plots/MSNN_DIM_{dim}.png")
+
+
+
+# Starting up...
+# (20, 1) (20, 1)
+# TRAINING STAGE 1: Data size: (20, 1)
+# Adam  Optimization: 100%|██████████████████████████████████████████████████████████████████████████████████████| 3000/3000 [00:04<00:00, 693.86it/s]
+# LBFGS Optimization:  50%|██████████████████████████████████████████▍                                          | 2998/6000 [01:39<01:31, 32.84iter/s]
+# Mode: LBFGSIter: 3000, loss: 3.9392e-10
+# LBFGS Optimization:  93%|██████████████████████████████████████████████████████████████████████████████▋      | 5554/6000 [03:01<00:14, 30.65iter/s]
+# Completed training stage 1, loss=1.257657001214883e-10, residue=8.957105059497232e-06
+# Full FFT:   Dominant Frequency = 0.5, Kappa = 3.141592653589793, Time=0.002705097198486328
+# Sparse FFT: Dominant Frequency = 0.5, Kappa = 3.141592653589793, Time=0.00024771690368652344
+# Zero Crossing: Kappa = 3, Time=0.00011324882507324219
+# Test Passed: Sparse FFT produces similar results to Full FFT.

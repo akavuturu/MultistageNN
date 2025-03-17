@@ -334,14 +334,3 @@ def poisson(x_train):
 
     ff = tf.convert_to_tensor(ff, dtype=tf.float64)  
     return ff
-
-def calculate_N(f_max, L):
-    dx = 1 / (2 * f_max) 
-    N = int(np.ceil(L / dx))
-    N = int(2 ** np.ceil(np.log2(N)))
-    return N
-
-def normalize(x):
-    mean, var = tf.nn.moments(x, axes=0)
-    normalized_x = (x - mean) / (tf.sqrt(var))
-    return normalized_x
