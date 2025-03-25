@@ -13,12 +13,13 @@ import matplotlib.pyplot as plt
 from scipy.fft import fftfreq, fftshift, fftn
 import matplotlib.pyplot as plt
 from pylab import *
+import pickle
 
 from utils import NeuralNet, create_ds, poisson
 import argparse
 
 parser = argparse.ArgumentParser(description="Initialize and train the network.")
-# Network initialization arguments
+
 parser.add_argument(
     "--num_stages", type=int, default=4, help="Upper limit on number of stages in the network."
 )
@@ -39,6 +40,9 @@ parser.add_argument(
 )
 parser.add_argument(
     "--plot", type=bool, default=False, help="Save loss plot"
+)
+parser.add_argument(
+    "--load", type=str, help="Path to model to be loaded"
 )
 args = parser.parse_args()
 logging.basicConfig(
@@ -170,17 +174,18 @@ class MultistageNeuralNetwork:
         N_train = int(round(x_train.shape[0] ** (1 / dim)))
         g = residue.numpy().flatten()
         
-        # For very high dimensions, we may need to use a smaller grid
+        grid = g.reshape([N_train] * dim)
+
+        downsample_factor = 1
         if dim > 4:
-            N_per_dim = min(N_train, max(8, int(32 / np.sqrt(dim))))
-        else:
-            N_per_dim = N_train
-        
-        GG = g.reshape([N_per_dim] * dim)
+            downsample_factor = max(1, N_train // 16)
+
+        slices = tuple(slice(None, None, downsample_factor) for _ in range(dim))
+        GG = grid[slices]
         G = fftn(GG)
         G_shifted = fftshift(G)
         
-        N = N_per_dim
+        N = GG.shape[0]
         total_time_range = 2  # Time range from -1 to 1
         sample_rate = N / total_time_range
         half_N = N // 2
@@ -233,57 +238,55 @@ class MultistageNeuralNetwork:
             num_zeros += np.count_nonzero(mask)
         kappa = 3 * num_zeros
         return kappa
+    
+def save_model(model, file_path):
+    model_data = {
+        'dim': model.dim,
+        'N': model.N,
+        'layers': model.layers,
+        'lt': model.lt,
+        'ut': model.ut,
+        'stages': []
+    }
+
+    for stage in model.stages:
+        stage_data = {
+            'weights': [w.numpy() for w in stage.weights],
+            'biases': [b.numpy() for b in stage.biases],
+            'lt': stage.lt,
+            'ut': stage.ut,
+            'kappa': stage.kappa,
+            'acts': stage.actv,
+            'loss': stage.loss
+        }
+        model_data['stages'].append(stage_data)
+
+    with open(file_path, 'wb') as f:
+        pickle.dump(model_data, f)
+
+def load_model(file_path, x_train, y_train):
+    with open(file_path, 'rb') as f:
+        model_data = pickle.load(f)
+        
+    model = MultistageNeuralNetwork(x_train, len(model_data['layers']) - 2, model_data['layers'][1])
+    model.dim = model_data['dim']
+    model.N = model_data['N']
+    model.layers = model_data['layers']
+    model.lt = model_data['lt']
+    model.ut = model_data['ut']
+
+    for stage_data in model_data['stages']:
+        nn = NeuralNet(x_train, y_train, layers=model.layers, kappa=stage_data['kappa'],
+            lt=stage_data['lt'], ut=stage_data['ut'], acts=0
+        )
+        nn.weights = [tf.Variable(w, dtype=tf.float64) for w in stage_data['weights']]
+        nn.biases = [tf.Variable(b, dtype=tf.float64) for b in stage_data['biases']]
+        model.stages.append(nn)
+
+    return model
+
 
 if __name__ == "__main__":
-
-    dim = 1
-    points_per_dim = 20
-    N = points_per_dim ** dim
-    lo, hi = -1, 1
-    num_stages = 2
-    num_hidden_layers = 3
-    num_hidden_nodes = 20
-    print("Starting up...")
-
-    x_train = create_ds(dim, lo, hi, N)
-    y_train = tf.reshape(poisson(x_train), [len(x_train), 1])
-    training_iters = list([(3000, 6000)] + [(5000, 8000*i) for i in range(2, 15)])[:num_stages]
-    print(x_train.shape, y_train.shape)
-
-
-    MSNN = MultistageNeuralNetwork(x_train, num_hidden_layers, num_hidden_nodes)
-    kappa = 1
-    print(f"TRAINING STAGE {1}: Data size: {x_train.shape}")
-    MSNN.train(x_train, y_train, stage=0, kappa=1, iters=training_iters[0])
-    curr_residue = y_train - tf.add_n([MSNN.stages[j].predict(x_train) for j in range(1)])
-    mean_residue = tf.reduce_mean(tf.abs(curr_residue))
-    print(f"Completed training stage 1, loss={MSNN.stages[-1].loss[-1]}, residue={mean_residue}")
-    
-    # Compute FFT-based dominant frequency
-    start_time = time.time()
-    kappa_f1, dominant_freq1 = MultistageNeuralNetwork.fftn_(x_train, y_train)
-    fft_time = time.time() - start_time
-
-    start_time = time.time()
-    kappa_f2, dominant_freq2, spectrum = MultistageNeuralNetwork.sfftn(x_train, y_train)
-    sfft_time = time.time() - start_time
-
-    start_time = time.time()
-    kappa_f3 = MultistageNeuralNetwork.find_zeros(y_train)
-    zeros_time = time.time() - start_time
-
-    # Print results
-    print(f"Full FFT:   Dominant Frequency = {dominant_freq1}, Kappa = {kappa_f1}, Time={fft_time}")
-    print(f"Sparse FFT: Dominant Frequency = {dominant_freq2}, Kappa = {kappa_f2}, Time={sfft_time}")
-    print(f"Zero Crossing: Kappa = {kappa_f3}, Time={zeros_time}")
-
-    # Validate results
-    assert np.isclose(dominant_freq1, dominant_freq2, atol=1e-3), "Dominant frequencies do not match closely"
-
-    print("Test Passed: Sparse FFT produces similar results to Full FFT.")
-
-    sys.exit(1)
-
     dim = args.dim
     L = args.L
     num_stages = args.num_stages
@@ -297,41 +300,26 @@ if __name__ == "__main__":
     y_train = tf.reshape(poisson(x_train), [len(x_train), 1])
     training_iters = list([(3000, 6000)] + [(5000, 8000*i) for i in range(2, 15)])[:num_stages]
 
-    MSNN = MultistageNeuralNetwork(x_train, num_hidden_layers, num_hidden_nodes)
-    kappa = 1
-    logging.info(f"TRAINING STAGE {1}: Data size: {x_train.shape}")
-    MSNN.train(x_train, y_train, stage=0, kappa=1, iters=training_iters[0])
-    curr_residue = y_train - tf.add_n([MSNN.stages[j].predict(x_train) for j in range(1)])
-    mean_residue = tf.reduce_mean(tf.abs(curr_residue))
-    logging.info(f"Completed training stage 1, loss={MSNN.stages[-1].loss[-1]}, residue={mean_residue}")
-
-    i = 1
-    while mean_residue > precision and i < num_stages:
-        # kappa, f_d = MultistageNeuralNetwork.fftn_(x_train, curr_residue)
-        # if f_d == 0: 
-        #     logging.info("Oops! Your dominant frequency is 0...")
-        #     break
-        kappa = MultistageNeuralNetwork.find_zeros(curr_residue)
-        
-        # N_train = int(6 * np.pi * f_d)
-        # x_train = create_ds(dim, -L/2, L/2, N_train, max_data_size)
-        # y_train = tf.reshape(poisson(x_train), [len(x_train), 1])
-
-        logging.info(f"TRAINING STAGE {i + 1}: Data size: {x_train.shape}")
-
-        curr_residue = y_train - tf.add_n([MSNN.stages[j].predict(x_train) for j in range(i)])
-        MSNN.train(x_train, curr_residue, stage=i, kappa=kappa, iters=training_iters[i])
-
-        mean_residue = tf.reduce_mean(tf.abs(y_train - tf.add_n([MSNN.stages[j].predict(x_train) for j in range(i)])))
-        logging.info(f"Completed training stage {i + 1}, loss={MSNN.stages[i].loss[-1]}, residue={mean_residue}")
-        i += 1
-
-    if i >= num_stages:
-        logging.info(f"Reached maximum stages, loss={MSNN.stages[-1].loss[-1]}, residue={mean_residue}")
-    elif mean_residue <= precision:
-        logging.info(f"Reached threshold precision, loss={MSNN.stages[-1].loss[-1]}, residue={mean_residue}")
+    if args.load is not None:
+        MSNN = load_model(args.load, x_train, y_train)
     else:
-        logging.info(f"Exited training unexpectedly, previous loss={MSNN.stages[-2].loss[-1]}, previous residue={mean_residue}")
+        MSNN = MultistageNeuralNetwork(x_train, num_hidden_layers, num_hidden_nodes)
+        kappa = 1
+        logging.info(f"TRAINING STAGE {1}: Data size: {x_train.shape}")
+        MSNN.train(x_train, y_train, stage=0, kappa=1, iters=training_iters[0])
+        curr_residue = y_train - tf.add_n([MSNN.stages[j].predict(x_train) for j in range(1)])
+        mean_residue = tf.reduce_mean(tf.abs(curr_residue))
+        logging.info(f"Completed training stage 1, loss={MSNN.stages[-1].loss[-1]}, residue={mean_residue}")
+
+        i = 1
+        while mean_residue > precision and i < num_stages:
+            kappa_s, _, _ = MultistageNeuralNetwork.sfftn(x_train, curr_residue)
+            logging.info(f"TRAINING STAGE {i + 1}")
+
+            curr_residue = y_train - tf.add_n([MSNN.stages[j].predict(x_train) for j in range(i)])
+            MSNN.train(x_train, curr_residue, stage=i, kappa=kappa_s, iters=training_iters[i])
+            logging.info(f"Completed training stage {i + 1}, loss={MSNN.stages[-1].loss[-1]}")
+            i += 1
 
     if args.plot:
         loss = np.concatenate([stage.loss for stage in MSNN.stages])
@@ -343,17 +331,12 @@ if __name__ == "__main__":
         plt.ylabel("Loss")
         plt.savefig(f"plots/MSNN_DIM_{dim}.png")
 
-
-
-# Starting up...
-# (20, 1) (20, 1)
-# TRAINING STAGE 1: Data size: (20, 1)
-# Adam  Optimization: 100%|██████████████████████████████████████████████████████████████████████████████████████| 3000/3000 [00:04<00:00, 693.86it/s]
-# LBFGS Optimization:  50%|██████████████████████████████████████████▍                                          | 2998/6000 [01:39<01:31, 32.84iter/s]
-# Mode: LBFGSIter: 3000, loss: 3.9392e-10
-# LBFGS Optimization:  93%|██████████████████████████████████████████████████████████████████████████████▋      | 5554/6000 [03:01<00:14, 30.65iter/s]
-# Completed training stage 1, loss=1.257657001214883e-10, residue=8.957105059497232e-06
-# Full FFT:   Dominant Frequency = 0.5, Kappa = 3.141592653589793, Time=0.002705097198486328
-# Sparse FFT: Dominant Frequency = 0.5, Kappa = 3.141592653589793, Time=0.00024771690368652344
-# Zero Crossing: Kappa = 3, Time=0.00011324882507324219
-# Test Passed: Sparse FFT produces similar results to Full FFT.
+    filename = f'/home/akavuturu/scr4_sgoswam4/akavuturu/models/model_dim{dim}.pkl'
+    if i >= num_stages:
+        logging.info(f"Reached maximum stages, loss={MSNN.stages[-1].loss[-1]}, residue={mean_residue}")
+        save_model(MSNN, filename)
+    elif mean_residue <= precision:
+        logging.info(f"Reached threshold precision, loss={MSNN.stages[-1].loss[-1]}, residue={mean_residue}")
+        save_model(MSNN, filename)
+    else:
+        logging.info(f"Exited training unexpectedly, previous loss={MSNN.stages[-2].loss[-1]}, previous residue={mean_residue}")

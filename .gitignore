@@ -6,6 +6,7 @@ __pycache__/
 # Plots and logs
 plots/
 logs/
+models/
 
 # C extensions
 *.so
