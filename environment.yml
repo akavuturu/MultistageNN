@@ -1,19 +1,18 @@
 name: msnn-env
 channels:
-  - defaults
+  - nvidia
   - conda-forge
+  - defaults
 dependencies:
-  - python=3.9
-  - numpy
+  - python=3.10
+  - numpy=1.23.5
   - matplotlib
   - scipy
   - pip
   - tqdm
-  - ipykernel
-  - libgcc
-  - libstdcxx-ng
+  - libprotobuf=3.20.3
+  - cudatoolkit=11.2.2
+  - cudnn=8.1
   - pip:
-      - tensorflow>=2.18
-      - tensorflow-probability
-      - tf-keras
-      - argparse
+      - tensorflow==2.10
+      - pillow==9.0.0
