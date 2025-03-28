@@ -311,7 +311,7 @@ if __name__ == "__main__":
     num_hidden_layers = args.num_hidden_layers
     num_hidden_nodes = args.num_hidden_nodes
     precision = args.precision
-    points_per_dim = 20
+    points_per_dim = 15
 
     N_train = points_per_dim ** dim
     x_train = create_ds(dim, -L/2, L/2, N_train)
