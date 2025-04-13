@@ -126,6 +126,10 @@ class MultistageNeuralNetwork:
             self.stages.append(NeuralNet(x_train, y_train, self.layers, kappa=kappa, lt=lt, ut=ut, acts=act))
             self.stages[stage].train(iters[0], 1)  # Train using Adam optimizer
             self.stages[stage].train(iters[1], 2)  # Train using L-BFGS optimizer
+    
+    def predict(self, x_train):
+        pred = tf.add_n([self.stages[j].predict(x_train) for j in range(len(self.stages))])
+        return pred
 
     @staticmethod
     def fftn_(x_train, residue):
@@ -299,6 +303,7 @@ def load_model(file_path, x_train, y_train):
         )
         nn.weights = [tf.Variable(w, dtype=tf.float64) for w in stage_data['weights']]
         nn.biases = [tf.Variable(b, dtype=tf.float64) for b in stage_data['biases']]
+        nn.loss = stage_data['loss']
         model.stages.append(nn)
 
     return model
@@ -334,9 +339,11 @@ if __name__ == "__main__":
             kappa_s, _, _ = MultistageNeuralNetwork.sfftn(x_train, curr_residue)
             logging.info(f"TRAINING STAGE {i + 1}")
 
-            curr_residue = y_train - tf.add_n([MSNN.stages[j].predict(x_train) for j in range(i)])
+            pred = tf.add_n([MSNN.stages[j].predict(x_train) for j in range(i + 1)])
+            curr_residue = y_train - pred
+            mean_residue = tf.reduce_mean(tf.abs(curr_residue))
             MSNN.train(x_train, curr_residue, stage=i, kappa=kappa_s, iters=training_iters[i])
-            logging.info(f"Completed training stage {i + 1}, loss={MSNN.stages[-1].loss[-1]}")
+            logging.info(f"Completed training stage {i + 1}, loss={MSNN.stages[-1].loss[-1]}, residue={mean_residue}")
             i += 1
 
     if args.plot:
