@@ -25,6 +25,7 @@ class NeuralNet:
 
         # determine the activation function to use
         self.actv = actv[acts]
+        self.act_id = acts
 
         # Initialize NNs
         self.weights, self.biases = self.initialize_NN(layers)
