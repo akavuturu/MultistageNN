@@ -1,30 +1,13 @@
-# %%
-# %%
-import warnings
-warnings.simplefilter("ignore")
 import os
 import sys
-os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 import tensorflow as tf
 import time
-import logging
-tf.get_logger().setLevel(logging.ERROR)
-
 import numpy as np
 import matplotlib.pyplot as plt
+import argparse
 from scipy.fft import fftfreq, fftshift, fftn
-import matplotlib.pyplot as plt
-
-# tf.debugging.set_log_device_placement(True)
-
 from utils_gpu import NeuralNet, create_ds, poisson
 
-# %%
-import tensorflow as tf
-print("TensorFlow version:", tf.__version__)
-print("GPUs available:", tf.config.list_physical_devices('GPU'))
-
-# %%
 class MultistageNeuralNetwork:
     """
     MultistageNeuralNetwork is a multi-stage model used for predicting
@@ -201,213 +184,169 @@ class MultistageNeuralNetwork:
         
         return kappa_f, dominant_freq, sparse_spectrum
 
-    def find_zeros(residue):
-        sign_residue = np.sign(residue)
-        num_zeros = 0
-        for axis in range(residue.ndim):
-            shifted_signs = np.roll(sign_residue, shift=-1, axis=axis)
-            mask = (sign_residue[:-1] * shifted_signs[:-1]) < 0
-            num_zeros += np.count_nonzero(mask)
-        kappa = 3 * num_zeros
-        return kappa
+    def predict(self, x_test):
+        """Make prediction using all stages combined."""
+        return tf.add_n([self.stages[j].predict(x_test) for j in range(len(self.stages))])
 
-# %%
-dim = 1
-L = 2.04
-num_stages = 4
-num_hidden_layers = 3
-num_hidden_nodes = 20
-precision = 1e-8
-points_per_dim = 5000
 
-N_train = points_per_dim ** dim
-x_train = create_ds(dim, -L/2, L/2, N_train)
-y_train = tf.reshape(poisson(x_train), [len(x_train), 1])
-training_iters = list([(3000, 6000)] + [(5000, 8000*i) for i in range(2, 15)])[:num_stages]
 
-print(x_train.shape, y_train.shape)
+def run_experiment(dim, output_file=None):
+    print(f"\n===== Training MSNN for dimension {dim} =====")
+    L = 2.04
+    num_stages = 4
+    num_hidden_layers = 3
+    num_hidden_nodes = 20
+    
+    if dim == 1: points_per_dim = 100
+    elif dim == 2: points_per_dim = 50
+    elif dim <= 5: points_per_dim = 15
+    elif dim <= 8: points_per_dim = 5
+    else: points_per_dim = 3
+    
+    N_train = points_per_dim ** dim
+    print(f"Using {points_per_dim} points per dimension (total points: {N_train})")
+    
+    test_points_per_dim = min(points_per_dim, 20) if dim > 5 else min(points_per_dim, 50)
+    
+    N_test = test_points_per_dim ** dim
+    x_test = create_ds(dim, -L/2, L/2, N_test)
+    y_test = tf.reshape(poisson(x_test), [len(x_test), 1])
+    print(f"Test set: {test_points_per_dim} points per dimension (total: {N_test})")
+    
+    if dim == 1: batch_size = 1000
+    elif dim == 2: batch_size = 800
+    elif dim <= 5: batch_size = 500
+    elif dim <= 8: batch_size = 200
+    else: batch_size = 100
 
-# %%
-# STAGE 1
-MSNN_SFFT = MultistageNeuralNetwork(x_train, num_hidden_layers, num_hidden_nodes)
-# MSNN_FFT = MultistageNeuralNetwork(x_train, num_hidden_layers, num_hidden_nodes)
-kappa = 1
-print(f"TRAINING STAGE {1}: Data size: {x_train.shape}")
-MSNN_SFFT.train(x_train, y_train, stage=0, kappa=1, iters=training_iters[0])
-curr_residue_sfft = y_train - tf.add_n([MSNN_SFFT.stages[j].predict(x_train) for j in range(1)])
-mean_residue = tf.reduce_mean(tf.abs(curr_residue_sfft))
-print(f"Completed training stage 1, loss={MSNN_SFFT.stages[-1].loss[-1]}, residue={mean_residue}")
-
-# %%
-i = 1
-while i < num_stages:
-    # kappa_f, _ = MultistageNeuralNetwork.fftn_(x_train, curr_residue_fft)
-    kappa_s, _, _ = MultistageNeuralNetwork.sfftn(x_train, curr_residue_sfft)
-    print(f"TRAINING STAGE {i + 1}")
-
-    curr_residue_sfft = y_train - tf.add_n([MSNN_SFFT.stages[j].predict(x_train) for j in range(i)])
-    mean_residue = tf.reduce_mean(tf.abs(curr_residue_sfft))
-    MSNN_SFFT.train(x_train, curr_residue_sfft, stage=i, kappa=kappa_s, iters=training_iters[i])
-    print(f"Completed training stage {i + 1} SFFT, loss={MSNN_SFFT.stages[-1].loss[-1]}, residue={mean_residue}")
-    i += 1
-
-if i >= num_stages:
-        print(f"Reached maximum stages, loss={MSNN_SFFT.stages[-1].loss[-1]}, residue={mean_residue}")
-else:
-    print(f"Exited training unexpectedly, previous loss={MSNN_SFFT.stages[-2].loss[-1]}, previous residue={mean_residue}")
-
-# %%
-import pickle
-def save_model(model, file_path):
-    model_data = {
-        'dim': model.dim,
-        'N': model.N,
-        'layers': model.layers,
-        'lt': [lt.numpy() for lt in model.lt],
-        'ut': [ut.numpy() for ut in model.ut],
-        'stages': []
-    }
-
-    for stage in model.stages:
-        stage_data = {
-            'weights': [w.numpy() for w in stage.weights],
-            'biases': [b.numpy() for b in stage.biases],
-            'lt': stage.lt,
-            'ut': stage.ut,
-            'kappa': stage.kappa,
-            'acts': stage.actv,
-            'loss': stage.loss
-        }
-        model_data['stages'].append(stage_data)
-
-    with open(file_path, 'wb') as f:
-        pickle.dump(model_data, f)
+    max_batches = 10 if dim < 8 else 20
+    training_iters = [(1000, 2000)] + [(2000, 4000)] * (num_stages-1)
+    
+    init_points_per_dim = min(5, points_per_dim)
+    init_points = init_points_per_dim ** dim
+    x_init = create_ds(dim, -L/2, L/2, init_points)
+    msnn = MultistageNeuralNetwork(x_init, num_hidden_layers, num_hidden_nodes)
+    
+    num_batches = min(max_batches, (N_train + batch_size - 1) // batch_size)
+    print(f"Using {num_batches} batches of size ~{batch_size} for training")
+    
+    total_time = 0
+    stage_times = []
+    mean_residues = []
+    
+    initial_residue = tf.reduce_mean(tf.abs(y_test)).numpy()
+    print(f"Initial mean residue before training: {initial_residue:.6e}")
+    
+    for stage in range(num_stages):
+        print(f"\nTRAINING STAGE {stage+1}")
+        stage_start_time = time.time()
+        kappa = 1 if stage == 0 else kappa_s
         
-save_model(MSNN_SFFT, "models/model_dim1.pkl")
+        for batch_idx in range(num_batches):
+            tf.keras.backend.clear_session()
 
-# %%
-loss_s = np.concatenate([stage.loss for stage in MSNN_SFFT.stages])
-# loss_f = np.concatenate([stage.loss for stage in MSNN_FFT.stages])
-plt.figure()
-plt.plot(loss_s, 'b-', label='SFFT')
-# plt.plot(loss_f, 'r', label='FFT')
-plt.yscale("log")
-plt.title(f"MSNN Dim {dim} Loss Plot")
-plt.xlabel("Iterations")
-plt.ylabel("Loss")
-plt.legend()
-
-plt.savefig('plots/1d_loss_curve.png')
-
-# %%
-yhat_1_sfft = MSNN_SFFT.stages[0].predict(x_train)
-# yhat_1_fft = MSNN_FFT.stages[0].predict(x_train)
-
-fig, (ax1, ax2, ax3, ax4) = plt.subplots(4, figsize=(8, 10))
-fig.subplots_adjust(hspace=0.9)
-plt.suptitle("1D Poisson and Predictions")
-
-ax1.set_title("1D Poisson")
-ax1.plot(x_train, yhat_1_sfft, 'b', label='MSNN')
-ax1.plot(x_train, y_train, 'g', label='True')
-ax1.legend()
-
-# plt.savefig("plots/1d_first_stage_pred")
-
-residue_sfft = y_train - tf.add_n([MSNN_SFFT.stages[j].predict(x_train) for j in range(1)])
-yhat_2_sfft = MSNN_SFFT.stages[1].predict(x_train)
-
-ax2.set_title("First Stage Residue")
-ax2.ticklabel_format(style='sci', axis='y', scilimits=(0,0))
-ax2.plot(x_train, yhat_2_sfft, 'b', label='SFFT')
-ax2.plot(x_train, residue_sfft, 'g', label='True')
-ax2.legend()
-
-# plt.savefig("plots/1d_second_stage_pred")
-
-residue_sfft = y_train - tf.add_n([MSNN_SFFT.stages[j].predict(x_train) for j in range(2)])
-yhat_3_sfft = MSNN_SFFT.stages[2].predict(x_train)
-
-ax3.set_title("Second Stage Residue")
-ax3.ticklabel_format(style='sci', axis='y', scilimits=(0,0))
-ax3.plot(x_train, yhat_3_sfft, 'b', label='SFFT')
-ax3.plot(x_train, residue_sfft, 'g', label='True')
-ax3.legend()
-
-residue_sfft = y_train - tf.add_n([MSNN_SFFT.stages[j].predict(x_train) for j in range(3)])
-yhat_4_sfft = MSNN_SFFT.stages[3].predict(x_train)
-
-ax4.set_title("Third Stage Residue")
-ax4.ticklabel_format(style='sci', axis='y', scilimits=(0,0))
-ax4.plot(x_train, yhat_4_sfft, 'b', label='SFFT')
-ax4.plot(x_train, residue_sfft, 'g', label='True')
-ax4.legend()
-
-fig.show()
-plt.savefig("plots/1d_combined_predictions")
-
-# %%
-def analytical_solution(x):
-    """
-    Analytical solution to the d-dimensional Poisson equation:
-    u(x) = prod(sin(pi*x_i))
-    """
-    return tf.reduce_prod(tf.math.sin(np.pi * x), axis=1)
-
-def compute_error(model, x_test, exact_solution):
-    """
-    Compute relative L2 and L-infinity errors.
-    """
-    y_pred = predict(model, x_test)
-    y_true = exact_solution(x_test)
-    y_true = tf.reshape(y_true, y_pred.shape)
+            batch_start = batch_idx * batch_size
+            batch_end = min(batch_start + batch_size, N_train)
+            actual_batch_size = batch_end - batch_start
+            
+            x_batch = create_ds(dim, -L/2, L/2, actual_batch_size)
+            y_batch = tf.reshape(poisson(x_batch), [len(x_batch), 1])
+            
+            if stage > 0:
+                pred_chunk_size = min(actual_batch_size, 500)
+                y_pred = []
+                
+                for i in range(0, actual_batch_size, pred_chunk_size):
+                    end_idx = min(i + pred_chunk_size, actual_batch_size)
+                    x_pred_chunk = x_batch[i:end_idx]
+                    pred_chunk = msnn.predict(x_pred_chunk)
+                    y_pred.append(pred_chunk)
+                
+                y_pred = tf.concat(y_pred, axis=0)
+                y_batch_residue = y_batch - y_pred
+            else:
+                y_batch_residue = y_batch
+            
+            print(f"  Batch {batch_idx+1}/{num_batches}: Training with {actual_batch_size} points")
+            
+            if stage == 0 and batch_idx == 0:
+                msnn.train(x_batch, y_batch_residue, stage=stage, kappa=kappa, iters=training_iters[stage])
+            else:
+                adjusted_iters = (max(int(training_iters[stage][0] / (batch_idx + 1)), 200), 
+                                 max(int(training_iters[stage][1] / (batch_idx + 1)), 500))
+                msnn.train(x_batch, y_batch_residue, stage=stage, kappa=kappa, iters=adjusted_iters)
+        
+        stage_time = time.time() - stage_start_time
+        total_time += stage_time
+        stage_times.append(stage_time)
+        print(f"Stage {stage+1} training completed in {stage_time:.1f}s")
+        
+        y_test_pred = msnn.predict(x_test)
+        test_residue = y_test - y_test_pred
+        curr_residue = tf.reduce_mean(tf.abs(test_residue)).numpy()
+        mean_residues.append(curr_residue)
+        print(f"Stage {stage+1} mean residue: {curr_residue:.6e}")
+        
+        if stage < num_stages - 1:
+            y_test_pred = msnn.predict(x_test)
+            test_residue = y_test - y_test_pred
+            kappa_s, dominant_freq, _ = MultistageNeuralNetwork.sfftn(x_test, test_residue)
+            print(f"Next stage kappa: {kappa_s:.4f}, Dominant frequency: {dominant_freq:.4f}")
     
-    abs_error = tf.abs(y_pred - y_true)
-    l2_error = tf.sqrt(tf.reduce_mean(tf.square(abs_error))) / tf.sqrt(tf.reduce_mean(tf.square(y_true)))
-    linf_error = tf.reduce_max(abs_error) / tf.reduce_max(tf.abs(y_true))
-    
-    return l2_error.numpy(), linf_error.numpy()
-
-# %%
-def predict(model, x_train):
-    pred = tf.add_n([model.stages[j].predict(x_train) for j in range(len(model.stages))])
-    return pred
-
-# %%
-def generate_1d_reproduction_data():
-    """
-    Reproduce the 1D results from Wang and Lai (2024).
-    """
-    logging.info("Generating 1D reproduction data")
-    dim = 1
-    points_per_dim = 50  # Higher resolution for 1D
-    num_stages = 5
-    
-    # Generate data for convergence plot (Figure 1)
-    x_test = create_ds(dim, -1.0, 1.0, 200)
-    stage_errors = []
-    
-    # Calculate error after each stage
-    for s in range(1, len(MSNN_SFFT.stages) + 1):
-        partial_msnn = MultistageNeuralNetwork(x_test, 3, 20)
-        partial_msnn.stages = MSNN_SFFT.stages[:s]
-        l2_error, linf_error = compute_error(partial_msnn, x_test, analytical_solution)
-        stage_errors.append((s, l2_error, linf_error))
-    
-    # Create convergence plot
     plt.figure(figsize=(10, 6))
-    stages, l2_errors, _ = zip(*stage_errors)
-    plt.semilogy(stages, l2_errors, 'o-', linewidth=2, markersize=8)
+    plt.semilogy([0] + list(range(1, num_stages + 1)), [initial_residue] + mean_residues, 'o-', linewidth=2, markersize=10)
     plt.grid(True, which="both", ls="--")
     plt.xlabel('Stage', fontsize=14)
-    plt.ylabel('Relative $L^2$ Error', fontsize=14)
-    plt.title('Convergence of MSNN for 1D Poisson Equation', fontsize=16)
-    plt.savefig('plots/figure1_1d_convergence.png', dpi=300, bbox_inches='tight')
+    plt.ylabel('Mean Absolute Residue', fontsize=14)
+    plt.title(f'Residue Reduction over Stages for {dim}D Problem', fontsize=16)
     
-    print(f"1D reproduction complete: final L2 error = {l2_errors[-1]:.6e}")
-    return stage_errors
+    for i, residue in enumerate([initial_residue] + mean_residues):
+        plt.annotate(f"{residue:.2e}", xy=(i, residue), xytext=(10, 0), textcoords="offset points", fontsize=11, ha='left')
+    
+    os.makedirs('plots', exist_ok=True)
+    plt.tight_layout()
+    plt.savefig(f'plots/residue_reduction_dim{dim}.png', dpi=300)
+    plt.close()
+    
+    # Prepare result
+    result = {
+        'dimension': dim,
+        'final_residue': mean_residues[-1],
+        'training_time': total_time,
+        'stage_times': stage_times,
+        'mean_residues': mean_residues
+    }
+    
+    # For Poisson's equation with d dimensions, approximate L2 error is about residue / (2π²d)
+    estimated_l2_error = mean_residues[-1] / (2 * np.pi**2 * dim)
+    result['estimated_l2_error'] = estimated_l2_error
+    
+    if output_file:
+        with open(output_file, 'w') as f:
+            f.write(f"Dimension: {dim}\n")
+            f.write(f"Final Mean Residue: {mean_residues[-1]:.6e}\n")
+            f.write(f"Estimated L2 Error: {estimated_l2_error:.6e}\n")
+            f.write(f"Training Time: {total_time:.1f}s\n\n")
+            
+            f.write("Residue by Stage:\n")
+            f.write(f"Initial: {initial_residue:.6e}\n")
+            for i, residue in enumerate(mean_residues):
+                f.write(f"Stage {i+1}: {residue:.6e}\n")
+            
+            f.write("\nTraining Time by Stage:\n")
+            for i, t in enumerate(stage_times):
+                f.write(f"Stage {i+1}: {t:.1f}s\n")
+    
+    return result
 
-# %%
-stage_errors = generate_1d_reproduction_data()
-
-
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="MSNN Residue Analysis and Table Reproduction")
+    parser.add_argument("--dim", type=int, required=True, help="Dimension to run")
+    parser.add_argument("--output", type=str, default=None, help="Output file for detailed results")
+    args = parser.parse_args()
+    
+    result = run_experiment(args.dim, args.output)
+    print("\nTable 4.1 Entry:")
+    print(f"{'Dimension d':<12} {'Mean Residue':<20} {'Est. L2 Error':<20} {'Training Time (s)':<15}")
+    print("-" * 65)
+    print(f"{result['dimension']:<12} {result['final_residue']:<.2e} {result['estimated_l2_error']:<.2e} {result['training_time']:<.1f}")
