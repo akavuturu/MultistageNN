@@ -1,0 +1,49 @@
+2D Test Results:
+
+1st Stage (50 ppd): ***
+Stage 1 Training Stats: loss=2.0837582689829357e-05, residue=0.0031536338064018787, rel L2 error=0.0010975123679196814
+
+2nd Stage (50 ppd):
+Stage 2 Training Stats: loss=6.817495557677836e-09, mean residue=0.013920844734160187, rel L2 error=0.004119273782322786
+
+2nd Stage (60 ppd): ****
+Stage 2 Training Stats: loss=4.415386453775502e-08, mean residue=0.0001593078783273402, rel L2 error=5.0609903130791414e-05
+
+2nd stage (70 ppd):
+Stage 2 Training Stats: loss=5.1619195140219204e-08, mean residue=0.00016930281483386818, rel L2 error=5.478983317024112e-05
+
+2nd stage (80 ppd): 
+Stage 2 Training Stats: loss=3.355229904411937e-07, mean residue=0.0004390099055024071, rel L2 error=0.00013981733763777083
+
+3rd stage (70 ppd): ****
+Stage 3 Training Stats: loss=7.598032149397184e-10, mean residue=2.1307299229095154e-05, rel L2 error=6.627295238103338e-06
+
+3rd stage (80 ppd):
+Stage 3 Training Stats: loss=6.942761468777071e-10, mean residue=2.029474778031584e-05, rel L2 error=6.335076697522333e-06
+
+4th stage (80 ppd): ***
+Stage 4 Training Stats: loss=1.7391566986757464e-10, mean residue=1.0109923793495833e-05, rel L2 error=3.1706997022155207e-06
+
+
+3D Test Results:
+
+1st Stage (15 ppd): ****
+Stage 1 Training Stats: loss=0.0041795902071953845, mean residue=0.04640352576264874, rel L2 error=0.007228535690184375
+
+2nd Stage (20 ppd): ****
+Stage 2 Training Stats: loss=3.566344543374417e-05, mean residue=0.004452926226964856, rel L2 error=0.0006695540009408806
+
+2nd Stage (25 ppd):
+Stage 2 Training Stats: loss=3.520434685450483e-05, mean residue=0.004391440682525593, rel L2 error=0.000666170220243104
+
+3rd Stage (25 ppd): ****
+Stage 3 Training Stats: loss=2.593853564938283e-05, mean residue=0.003931524476140864, rel L2 error=0.0005718205990579521
+
+3rd Stage (30 ppd):
+Stage 3 Training Stats: loss=1.0872011937582438e-05, mean residue=0.0026079171568806022, rel L2 error=0.0003686705428851559
+
+4th stage (30 ppd): ****
+Stage 4 Training Stats: loss=1.8165392272534344e-05, mean residue=0.0032881721045285002, rel L2 error=0.0004789388906208729
+
+4th stage (35 ppd):
+Stage 4 Training Stats: loss=1.7947309820004354e-05, mean residue=0.003269733327198177, rel L2 error=0.0004763263396997338

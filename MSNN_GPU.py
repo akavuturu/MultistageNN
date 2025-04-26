@@ -251,15 +251,9 @@ class MultistageNeuralNetwork:
         
         return kappa_f, dominant_freq, sparse_spectrum
 
-    def find_zeros(residue):
-        sign_residue = np.sign(residue)
-        num_zeros = 0
-        for axis in range(residue.ndim):
-            shifted_signs = np.roll(sign_residue, shift=-1, axis=axis)
-            mask = (sign_residue[:-1] * shifted_signs[:-1]) < 0
-            num_zeros += np.count_nonzero(mask)
-        kappa = 3 * num_zeros
-        return kappa
+    def predict(self, x_test):
+        """Make prediction using all stages combined."""
+        return tf.add_n([self.stages[j].predict(x_test) for j in range(len(self.stages))])
     
 def save_model(model, file_path):
     model_data = {

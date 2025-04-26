@@ -1,6 +1,6 @@
 import numpy as np
 import tensorflow as tf
-# import tensorflow_probability as tfp
+import tensorflow_probability as tfp
 from scipy.optimize import minimize
 from tqdm import tqdm
 from itertools import product
@@ -8,39 +8,39 @@ from itertools import product
 class NeuralNet:
     # Initialize the class
     def __init__(self, t_u, x_u, layers, kappa, lt, ut, acts=0):
+        with tf.device('/GPU:0'):
+            self.scale = tf.reduce_max(tf.abs(x_u)) / 2
+            x_u2 = x_u / self.scale
+            actv = [tf.tanh, tf.sin]
 
-        self.scale = tf.reduce_max(tf.abs(x_u)) / 2
-        x_u2 = x_u / self.scale
-        actv = [tf.tanh, tf.sin]
+            self.t_u = t_u
+            self.x_u = x_u2
+            self.datatype = t_u.dtype
 
-        self.t_u = t_u
-        self.x_u = x_u2
-        self.datatype = t_u.dtype
+            self.lt = lt
+            self.ut = ut
 
-        self.lt = lt
-        self.ut = ut
+            self.layers = layers
+            self.kappa = kappa
 
-        self.layers = layers
-        self.kappa = kappa
+            # determine the activation function to use
+            self.actv = actv[acts]
+            self.act_id = acts
 
-        # determine the activation function to use
-        self.actv = actv[acts]
-        self.act_id = acts
+            # Initialize NNs
+            self.weights, self.biases = self.initialize_NN(layers)
 
-        # Initialize NNs
-        self.weights, self.biases = self.initialize_NN(layers)
+            # Create a list including all training variables
+            self.train_variables = self.weights + self.biases
+            # Key point: anything updates in train_variables will be
+            #            automatically updated in the original tf.Variable
 
-        # Create a list including all training variables
-        self.train_variables = self.weights + self.biases
-        # Key point: anything updates in train_variables will be
-        #            automatically updated in the original tf.Variable
+            # define the loss function
+            self.loss0 = self.scale ** 2
+            self.loss = []
+            self.loss_0 = self.loss_NN()
 
-        # define the loss function
-        self.loss0 = self.scale ** 2
-        self.loss = []
-        self.loss_0 = self.loss_NN()
-
-        self.optimizer_Adam = tf.optimizers.Adam()
+            self.optimizer_Adam = tf.optimizers.Adam()
 
     '''
     Functions used to establish the initial neural network
@@ -48,22 +48,24 @@ class NeuralNet:
     '''
 
     def initialize_NN(self, layers):
-        weights = []
-        biases = []
-        num_layers = len(layers)
+        with tf.device('/GPU:0'):
+            weights = []
+            biases = []
+            num_layers = len(layers)
 
-        for l in range(0, num_layers - 1):
-            W = self.MPL_init(size=[layers[l], layers[l + 1]])
-            b = tf.Variable(tf.zeros([1, layers[l + 1]], dtype=self.datatype))
-            weights.append(W)
-            biases.append(b)
-        return weights, biases
+            for l in range(0, num_layers - 1):
+                W = self.MPL_init(size=[layers[l], layers[l + 1]])
+                b = tf.Variable(tf.zeros([1, layers[l + 1]], dtype=self.datatype))
+                weights.append(W)
+                biases.append(b)
+            return weights, biases
 
     def MPL_init(self, size):
-        in_dim = size[0]
-        out_dim = size[1]
-        xavier_stddev = np.sqrt(2 / (in_dim + out_dim))
-        return tf.Variable(tf.random.truncated_normal([in_dim, out_dim], stddev=xavier_stddev, dtype=self.datatype))
+        with tf.device('/GPU:0'):
+            in_dim = size[0]
+            out_dim = size[1]
+            xavier_stddev = np.sqrt(2 / (in_dim + out_dim))
+            return tf.Variable(tf.random.truncated_normal([in_dim, out_dim], stddev=xavier_stddev, dtype=self.datatype))
 
     def get_params(self):
         return (self.weights, self.biases)
@@ -219,7 +221,7 @@ class NeuralNet:
             return loss_value, grads
 
         # store these information as members so we can use them outside the scope
-        f2.iter = tf.Variable(0)
+        with tf.device('/GPU:0'): f2.iter = tf.Variable(0)
         f2.idx = idx
         f2.part = part
         f2.shapes = shapes
@@ -228,63 +230,40 @@ class NeuralNet:
 
         return f2
 
-    # define the function to apply the L-BFGS optimizer
-    # def Lbfgs_optimizer(self, nIter, varlist):
-
-    #     func = self.Lbfgs_function(varlist)
-
-    #     # convert initial model parameters to a 1D tf.Tensor
-    #     init_params = tf.dynamic_stitch(func.idx, varlist)
-
-    #     max_nIter = tf.cast(nIter / 3, dtype=tf.int32)
-
-    #     # Initialize the tqdm progress bar
-    #     with tqdm(total=nIter, desc="LBFGS Optimization", unit="iter") as pbar:
-
-    #         # Create a custom function for value and gradients that we can manually control
-    #         def value_and_grads_fn(params_1d):
-    #             # This function computes both the loss and gradients while updating the progress bar.
-    #             f2 = func(params_1d)
-    #             pbar.update(1)
-    #             return f2
-
-    #         # Run the L-BFGS optimizer with a custom value_and_grads_fn
-    #         results = tfp.optimizer.lbfgs_minimize(
-    #             value_and_gradients_function=value_and_grads_fn,
-    #             initial_position=init_params,
-    #             tolerance=1e-11,
-    #             max_iterations=max_nIter
-    #         )
-
-    #     # after training, the final optimized parameters are still in results.position
-    #     # so we have to manually put them back to the model
-    #     func.assign_new_model_parameters(results.position)
-
-    #     return func
+    # Define the function to apply the L-BFGS optimizer
     def Lbfgs_optimizer(self, nIter, varlist):
         func = self.Lbfgs_function(varlist)
 
-        # Convert initial model parameters to a 1D numpy array
-        init_params = tf.dynamic_stitch(func.idx, varlist).numpy()
+        # Convert initial model parameters to a 1D tf.Tensor
+        init_params = tf.dynamic_stitch(func.idx, varlist)
 
-        # Define a function to return loss and gradients for SciPy
+        # Set max iterations (optimizing nIter and tolerance for faster convergence)
+        max_nIter = tf.cast(nIter // 3, dtype=tf.int32)
+
+        # Initialize the tqdm progress bar
         with tqdm(total=nIter, desc="LBFGS Optimization", unit="iter") as pbar:
-            def scipy_func(params_1d):
-                loss, grads = func(params_1d)
-                pbar.update(1)
-                return loss.numpy().astype(np.float64), grads.numpy().astype(np.float64)
 
-            # Run L-BFGS using SciPy
-            results = minimize(
-                fun=scipy_func,
-                x0=init_params,
-                jac=True,  # Since our function returns both loss and gradients
-                method="L-BFGS-B",
-                options={"maxiter": nIter, "disp": True, "gtol": 1e-32, "ftol": 1e-32}
-            )
+            # Create a custom function for value and gradients that we can manually control
+            def value_and_grads_fn(params_1d):
+                with tf.device('/GPU:0'):
+                    # This function computes both the loss and gradients while updating the progress bar.
+                    f2 = func(params_1d)
+                    pbar.update(1)
+                    return f2
 
-        # Update model parameters with optimized results
-        func.assign_new_model_parameters(results.x)
+            # Run the L-BFGS optimizer with a custom value_and_grads_fn
+            with tf.device('/GPU:0'):
+                results = tfp.optimizer.lbfgs_minimize(
+                    value_and_gradients_function=value_and_grads_fn,
+                    initial_position=init_params,
+                    tolerance=1e-6,
+                    max_iterations=max_nIter
+                )
+
+        # After training, the final optimized parameters are still in results.position
+        # So we have to manually put them back to the model
+        with tf.device('/GPU:0'):
+            func.assign_new_model_parameters(results.position)
 
         return func
 
